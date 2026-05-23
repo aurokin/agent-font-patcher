@@ -2,10 +2,10 @@
 
 Patch Nerd Fonts-compatible fonts with glyphs for modern agent tooling.
 
-This repository is starting as a design and tooling sandbox. The initial goal is
-to define a repeatable pipeline for taking approved monochrome/vector agent-tool
-marks, assigning them to a private-use Unicode range, patching one or more base
-fonts, and validating that the generated font renders cleanly in terminal UIs.
+This repository is starting as a design and tooling sandbox. The goal is to
+define a repeatable CLI for taking approved monochrome/vector agent-tool marks,
+assigning them to a private-use Unicode range, patching one or more base fonts,
+and validating that the generated font renders cleanly in terminal UIs.
 
 ## Early Scope
 
@@ -46,13 +46,33 @@ glyph can be made legible without color.
 2. Normalize each mark into monochrome SVG.
 3. Convert SVG outlines into font glyphs.
 4. Patch target fonts using stable private-use codepoints.
-5. Generate a glyph specimen sheet for visual QA.
-6. Run font validation checks.
+5. Embed patch metadata for later inspection.
+6. Refresh font caches when in-place patching requires it.
+7. Generate a glyph specimen sheet for visual QA.
+8. Run font validation checks.
+
+## Product Decisions
+
+The project is focused on optional user-run font patching. Apps that can render
+SVGs should use SVGs directly, while terminal apps can keep emoji or stock Nerd
+Fonts fallbacks and use this project for accurate opt-in glyphs.
+
+Supported output modes:
+
+- Branch-off font: create a new `Agent Nerd Font` family. This is the default.
+- In-place patch: mutate the selected installed font with backup and cache
+  refresh support.
+
+More detail lives in:
+
+- [docs/decisions.md](docs/decisions.md)
+- [docs/font-cache.md](docs/font-cache.md)
+- [docs/brainstorm.md](docs/brainstorm.md)
 
 ## Current Status
 
 - Git repository initialized.
-- Brainstorm notes live in [docs/brainstorm.md](docs/brainstorm.md).
-- The referenced Claude share could not be extracted automatically; details are
-  in [docs/references/claude-share.md](docs/references/claude-share.md).
-
+- Product decisions captured in [docs/decisions.md](docs/decisions.md).
+- Font cache strategy captured in [docs/font-cache.md](docs/font-cache.md).
+- The referenced Claude share was loaded through Chrome and summarized in
+  [docs/references/claude-share.md](docs/references/claude-share.md).
