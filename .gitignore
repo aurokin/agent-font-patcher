@@ -9,4 +9,4 @@ dist/
 build/
 *.egg-info/
 out/
-
+.claude-share-extract.tmp.txt
