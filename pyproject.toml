@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-font-patcher"
+version = "0.1.0"
+description = "Patch Nerd Fonts-compatible fonts with modern agent tooling glyphs."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fonttools>=4.53",
+]
+
+[project.scripts]
+agent-font-patcher = "agent_font_patcher.cli:main"
+
+[tool.ruff]
+line-length = 100
+
+[tool.setuptools.packages.find]
+where = ["src"]
