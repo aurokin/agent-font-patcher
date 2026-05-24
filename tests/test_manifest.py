@@ -1,14 +1,6 @@
 from __future__ import annotations
 
 import unittest
-import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "src"
-
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from agent_font_patcher.manifest import ManifestError, codepoint_to_int, load_manifest, parse_manifest
 
