@@ -75,5 +75,7 @@ More detail lives in:
 - Git repository initialized.
 - Product decisions captured in [docs/decisions.md](docs/decisions.md).
 - Font cache strategy captured in [docs/font-cache.md](docs/font-cache.md).
+- Branch-off, in-place patching, backup/restore, cache refresh, and HTML
+  specimen generation are implemented in the CLI.
 - The referenced Claude share was loaded through Chrome and summarized in
   [docs/references/claude-share.md](docs/references/claude-share.md).

@@ -109,7 +109,8 @@ Conservative default: do not commit brand SVGs until license review is complete.
 1. Define metadata schema for glyphs.
 2. Add three original/non-branded status glyphs.
 3. Patch one permissive base font.
-4. Generate an HTML specimen and a PNG snapshot.
+4. Generate an HTML specimen. Add PNG snapshots once a renderer dependency is
+   chosen.
 5. Document how brand glyphs will be added after licensing review.
 
 ## Risks
@@ -118,4 +119,3 @@ Conservative default: do not commit brand SVGs until license review is complete.
 - Poor legibility when color logos are flattened into monochrome glyphs.
 - Codepoint collisions with user fonts or upstream Nerd Fonts.
 - Fragile build tooling around font metrics and hinting.
-

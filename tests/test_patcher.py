@@ -20,6 +20,7 @@ from agent_font_patcher.cli import (
     handle_cache_refresh,
     handle_inspect,
     handle_patch,
+    handle_preview,
     handle_restore,
 )
 from agent_font_patcher.font_cache import FontCacheError, FontCacheRefreshResult
@@ -814,6 +815,51 @@ class PatcherTest(unittest.TestCase):
             parser.parse_args(["cache"])
 
         self.assertNotEqual(error.exception.code, 0)
+
+    def test_preview_command_writes_specimen(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            font_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            output_path = root / "preview.html"
+            _write_minimal_font(
+                font_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+                extra_codepoints={0x100000: "agent.test_icon"},
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = handle_preview(
+                    SimpleNamespace(
+                        font_path=font_path,
+                        manifest_path=manifest_path,
+                        output=output_path,
+                        output_dir=None,
+                    )
+                )
+            html = output_path.read_text(encoding="utf-8")
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        self.assertIn(f"output: {output_path}", output)
+        self.assertIn("agent_glyphs: 1/1 present", output)
+        self.assertIn("Test Icon", html)
+
+    def test_preview_command_rejects_output_and_output_dir(self) -> None:
+        with self.assertRaisesRegex(ValueError, "output"):
+            handle_preview(
+                SimpleNamespace(
+                    font_path=Path("Example.ttf"),
+                    manifest_path=None,
+                    output=Path("preview.html"),
+                    output_dir=Path("out"),
+                )
+            )
 
     def test_inspect_prints_embedded_patch_range_and_icon_count(self) -> None:
         manifest = _available_icon_manifest()

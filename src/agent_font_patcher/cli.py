@@ -18,6 +18,11 @@ from agent_font_patcher.patcher import (
     restore_font_backup,
 )
 from agent_font_patcher.scanner import scan_fonts
+from agent_font_patcher.specimen import (
+    SpecimenError,
+    default_specimen_path,
+    generate_html_specimen,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -132,6 +137,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     restore_parser.set_defaults(handler=handle_restore)
 
+    preview_parser = subparsers.add_parser(
+        "preview",
+        help="Generate an HTML specimen for agent glyph visual QA.",
+    )
+    preview_parser.add_argument("font_path", type=Path)
+    preview_parser.add_argument(
+        "--manifest-path",
+        type=Path,
+        help="Load a manifest from this path instead of the packaged manifest.",
+    )
+    preview_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Write the specimen HTML to this path.",
+    )
+    preview_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Directory where the specimen HTML will be written.",
+    )
+    preview_parser.set_defaults(handler=handle_preview)
+
     cache_parser = subparsers.add_parser(
         "cache",
         help="Manage platform font caches.",
@@ -171,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     try:
         return args.handler(args)
-    except (FontCacheError, ManifestError, PatchError) as error:
+    except (FontCacheError, ManifestError, PatchError, SpecimenError) as error:
         parser.error(str(error))
     return 0
 
@@ -282,6 +309,19 @@ def handle_restore(args: argparse.Namespace) -> int:
     backup_path = restore_font_backup(args.font_path, backup_dir=args.backup_dir)
     print(f"restored: {args.font_path}")
     print(f"backup: {backup_path}")
+    return 0
+
+
+def handle_preview(args: argparse.Namespace) -> int:
+    if args.output is not None and args.output_dir is not None:
+        raise SpecimenError("--output cannot be used with --output-dir")
+    manifest = load_manifest(args.manifest_path)
+    output_path = args.output or default_specimen_path(args.font_path, args.output_dir)
+    result = generate_html_specimen(args.font_path, output_path, manifest)
+    print(f"font: {result.font_path}")
+    print(f"output: {result.output_path}")
+    print(f"agent_glyphs: {result.present_count}/{result.total_count} present")
+    print(f"patched: {'yes' if result.patch_metadata else 'no'}")
     return 0
 
 
