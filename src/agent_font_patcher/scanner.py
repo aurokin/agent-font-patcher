@@ -32,6 +32,7 @@ class FontCandidate:
     full_name: str | None
     postscript_name: str | None
     is_likely_nerd_font: bool
+    is_readable: bool
     is_writable: bool
     reason: str
 
@@ -211,6 +212,7 @@ def _candidate_from_font(path: Path, font: TTFont) -> FontCandidate:
         full_name=names.get("full_name"),
         postscript_name=names.get("postscript_name"),
         is_likely_nerd_font=is_likely,
+        is_readable=True,
         is_writable=os.access(path, os.W_OK),
         reason=reason if is_likely else "no Nerd Font marker",
     )
@@ -224,6 +226,7 @@ def _unreadable_candidate(path: Path, error: object) -> FontCandidate:
         full_name=None,
         postscript_name=None,
         is_likely_nerd_font=False,
+        is_readable=False,
         is_writable=os.access(path, os.W_OK),
         reason=f"unreadable font: {error}",
     )

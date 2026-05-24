@@ -121,7 +121,7 @@ def handle_inspect(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.manifest_path)
     inspection = inspect_agent_font(args.font_path, manifest)
     print_font_inspection(inspection)
-    return 1 if inspection.codepoints_error else 0
+    return 1 if inspection.codepoints_error or not inspection.candidate.is_readable else 0
 
 
 def print_font_inspection(inspection: FontInspection) -> None:

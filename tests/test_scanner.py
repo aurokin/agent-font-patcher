@@ -77,6 +77,7 @@ class ScannerTest(unittest.TestCase):
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].family, "Example Nerd Font")
         self.assertTrue(candidates[0].is_likely_nerd_font)
+        self.assertTrue(candidates[0].is_readable)
 
     def test_read_font_codepoints_reports_cmap_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -168,6 +169,7 @@ class ScannerTest(unittest.TestCase):
             candidate = inspect_font(font_path)
 
         self.assertFalse(candidate.is_likely_nerd_font)
+        self.assertFalse(candidate.is_readable)
         self.assertIn("unreadable font", candidate.reason)
 
     def test_metadata_struct_errors_are_treated_as_unreadable(self) -> None:
