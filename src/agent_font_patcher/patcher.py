@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import shutil
 import struct
 import tempfile
 import zlib
@@ -102,6 +103,7 @@ class PatchResult:
     output_path: Path
     patched_codepoints: tuple[str, ...]
     metadata: dict[str, Any]
+    backup_path: Path | None = None
 
 
 def patch_font_branch(
@@ -129,26 +131,14 @@ def patch_font_branch(
         raise PatchError(f"unable to read font: {error}") from error
 
     try:
-        _require_true_type_outline(font)
-        source_hash = _sha256_file(source_path)
-        source_name = _font_full_name(font) or source_path.stem
-        _rename_branch_family(font)
-        patched_codepoints = _add_available_manifest_glyphs(
-            font,
-            manifest,
+        patched_codepoints, metadata = _patch_font(
+            font=font,
+            source_path=source_path,
+            manifest=manifest,
             use_placeholder_glyphs=use_placeholder_glyphs,
             asset_base_dir=asset_base_dir,
+            rename_branch=True,
         )
-        if not patched_codepoints:
-            raise PatchError("manifest does not contain any available glyph assets")
-        metadata = _patch_metadata(
-            manifest=manifest,
-            patched_codepoints=patched_codepoints,
-            source_font_name=source_name,
-            source_hash=source_hash,
-            use_placeholder_glyphs=use_placeholder_glyphs,
-        )
-        _write_patch_metadata(font, metadata)
         output_dir.mkdir(parents=True, exist_ok=True)
         _save_font_exclusive(font, output_path)
     except (OSError, KeyError, UnicodeError, *FONT_PARSE_ERRORS) as error:
@@ -162,6 +152,85 @@ def patch_font_branch(
         patched_codepoints=patched_codepoints,
         metadata=metadata,
     )
+
+
+def patch_font_in_place(
+    source_path: Path,
+    manifest: Manifest,
+    *,
+    use_placeholder_glyphs: bool = False,
+    asset_base_dir: Path | None = None,
+    create_backup: bool = True,
+    backup_dir: Path | None = None,
+) -> PatchResult:
+    if manifest.project != "agent-font-patcher":
+        raise PatchError("manifest project must be agent-font-patcher")
+    _validate_manifest_private_use(manifest)
+    if source_path.is_symlink():
+        raise PatchError("in-place patching does not support symlinked font paths")
+    _reject_font_collection(source_path)
+    if not os.access(source_path, os.W_OK):
+        raise PatchError(f"font is not writable: {source_path}")
+    if not os.access(source_path.parent, os.W_OK):
+        raise PatchError(f"font directory is not writable: {source_path.parent}")
+
+    backup_path = _backup_path(source_path, backup_dir) if create_backup else None
+    if backup_path is not None and (backup_path.exists() or backup_path.is_symlink()):
+        raise PatchError(f"backup already exists: {backup_path}")
+
+    font: TTFont | None = None
+    try:
+        with source_path.open("rb") as font_file:
+            font = TTFont(font_file, lazy=False, fontNumber=0)
+    except (OSError, *FONT_PARSE_ERRORS) as error:
+        raise PatchError(f"unable to read font: {error}") from error
+
+    try:
+        patched_codepoints, metadata = _patch_font(
+            font=font,
+            source_path=source_path,
+            manifest=manifest,
+            use_placeholder_glyphs=use_placeholder_glyphs,
+            asset_base_dir=asset_base_dir,
+            rename_branch=False,
+        )
+        backup_created = False
+        try:
+            if backup_path is not None:
+                _create_backup(source_path, backup_path)
+                backup_created = True
+            _save_font_replace(font, source_path, stat_source=source_path)
+        except Exception:
+            if backup_created and backup_path is not None:
+                backup_path.unlink(missing_ok=True)
+            raise
+    except (OSError, KeyError, UnicodeError, *FONT_PARSE_ERRORS) as error:
+        raise PatchError(f"unable to patch font: {error}") from error
+    finally:
+        font.close()
+
+    return PatchResult(
+        source_path=source_path,
+        output_path=source_path,
+        patched_codepoints=patched_codepoints,
+        metadata=metadata,
+        backup_path=backup_path,
+    )
+
+
+def restore_font_backup(font_path: Path, *, backup_dir: Path | None = None) -> Path:
+    if font_path.is_symlink():
+        raise PatchError("restore does not support symlinked font paths")
+    backup_path = _backup_path(font_path, backup_dir)
+    if not backup_path.exists() or backup_path.is_symlink():
+        raise PatchError(f"backup does not exist: {backup_path}")
+    if not os.access(font_path.parent, os.W_OK):
+        raise PatchError(f"font directory is not writable: {font_path.parent}")
+    try:
+        _restore_backup(backup_path, font_path)
+    except OSError as error:
+        raise PatchError(f"unable to restore font: {error}") from error
+    return backup_path
 
 
 def read_patch_metadata(path: Path) -> dict[str, Any] | None:
@@ -189,6 +258,13 @@ def read_patch_metadata(path: Path) -> dict[str, Any] | None:
 
 def _branch_output_path(source_path: Path, output_dir: Path) -> Path:
     return output_dir / f"{source_path.stem}-Agent{source_path.suffix}"
+
+
+def _backup_path(source_path: Path, backup_dir: Path | None) -> Path:
+    backup_name = f"{source_path.name}.agent-font-patcher-backup"
+    if backup_dir is None:
+        return source_path.with_name(backup_name)
+    return backup_dir / backup_name
 
 
 def _sha256_file(path: Path) -> str:
@@ -231,6 +307,39 @@ def _is_patch_metadata(metadata: object) -> bool:
     if not REQUIRED_METADATA_KEYS.issubset(metadata.keys()):
         return False
     return isinstance(metadata.get("patched_codepoints"), list)
+
+
+def _patch_font(
+    *,
+    font: TTFont,
+    source_path: Path,
+    manifest: Manifest,
+    use_placeholder_glyphs: bool,
+    asset_base_dir: Path | None,
+    rename_branch: bool,
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    _require_true_type_outline(font)
+    source_hash = _sha256_file(source_path)
+    source_name = _font_full_name(font) or source_path.stem
+    if rename_branch:
+        _rename_branch_family(font)
+    patched_codepoints = _add_available_manifest_glyphs(
+        font,
+        manifest,
+        use_placeholder_glyphs=use_placeholder_glyphs,
+        asset_base_dir=asset_base_dir,
+    )
+    if not patched_codepoints:
+        raise PatchError("manifest does not contain any available glyph assets")
+    metadata = _patch_metadata(
+        manifest=manifest,
+        patched_codepoints=patched_codepoints,
+        source_font_name=source_name,
+        source_hash=source_hash,
+        use_placeholder_glyphs=use_placeholder_glyphs,
+    )
+    _write_patch_metadata(font, metadata)
+    return patched_codepoints, metadata
 
 
 def _add_available_manifest_glyphs(
@@ -816,6 +925,90 @@ def _save_font_exclusive(font: TTFont, output_path: Path) -> None:
             temp_file.close()
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
+
+
+def _save_font_replace(font: TTFont, output_path: Path, *, stat_source: Path | None = None) -> None:
+    temp_path: Path | None = None
+    temp_file = tempfile.NamedTemporaryFile(
+        dir=output_path.parent,
+        prefix=f".{output_path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    try:
+        temp_path = Path(temp_file.name)
+        temp_file.close()
+        font.save(temp_path)
+        if stat_source is not None:
+            _copy_file_metadata(stat_source, temp_path)
+        os.replace(temp_path, output_path)
+        temp_path = None
+    finally:
+        if not temp_file.file.closed:
+            temp_file.close()
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def _create_backup(source_path: Path, backup_path: Path) -> None:
+    temp_path: Path | None = None
+    backup_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = tempfile.NamedTemporaryFile(
+        dir=backup_path.parent,
+        prefix=f".{backup_path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    try:
+        temp_path = Path(temp_file.name)
+        with source_path.open("rb") as source_file:
+            with temp_file:
+                shutil.copyfileobj(source_file, temp_file)
+        _copy_file_metadata(source_path, temp_path)
+        os.link(temp_path, backup_path)
+    except FileExistsError as error:
+        raise PatchError(f"backup already exists: {backup_path}") from error
+    finally:
+        if not temp_file.file.closed:
+            temp_file.close()
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def _restore_backup(backup_path: Path, font_path: Path) -> None:
+    temp_path: Path | None = None
+    temp_file = tempfile.NamedTemporaryFile(
+        dir=font_path.parent,
+        prefix=f".{font_path.name}.restore.",
+        suffix=".tmp",
+        delete=False,
+    )
+    try:
+        temp_path = Path(temp_file.name)
+        with backup_path.open("rb") as backup_file:
+            shutil.copyfileobj(backup_file, temp_file)
+        temp_file.close()
+        _copy_file_metadata(backup_path, temp_path)
+        os.replace(temp_path, font_path)
+        temp_path = None
+    finally:
+        if not temp_file.file.closed:
+            temp_file.close()
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def _copy_file_metadata(source_path: Path, target_path: Path) -> None:
+    source_stat = source_path.stat()
+    chown = getattr(os, "chown", None)
+    if chown is not None:
+        try:
+            chown(target_path, source_stat.st_uid, source_stat.st_gid)
+        except PermissionError:
+            target_stat = target_path.stat()
+            if (target_stat.st_uid, target_stat.st_gid) != (source_stat.st_uid, source_stat.st_gid):
+                raise
+    shutil.copystat(source_path, target_path, follow_symlinks=False)
 
 
 def _write_patch_metadata(font: TTFont, metadata: dict[str, Any]) -> None:

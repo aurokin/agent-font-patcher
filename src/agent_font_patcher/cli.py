@@ -5,7 +5,13 @@ from pathlib import Path
 
 from agent_font_patcher.inspector import FontInspection, inspect_agent_font
 from agent_font_patcher.manifest import Manifest, ManifestError, load_manifest
-from agent_font_patcher.patcher import PatchError, PatchResult, patch_font_branch
+from agent_font_patcher.patcher import (
+    PatchError,
+    PatchResult,
+    patch_font_branch,
+    patch_font_in_place,
+    restore_font_backup,
+)
 from agent_font_patcher.scanner import scan_fonts
 
 
@@ -51,14 +57,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     patch_parser = subparsers.add_parser(
         "patch",
-        help="Create a branch-off font from an explicit glyph manifest.",
+        help="Patch a font from an explicit glyph manifest.",
     )
     patch_parser.add_argument("font_path", type=Path)
     patch_parser.add_argument(
         "--output-dir",
-        required=True,
         type=Path,
         help="Directory where the patched branch-off font will be written.",
+    )
+    patch_parser.add_argument(
+        "--in-place",
+        action="store_true",
+        help="Patch the source font file directly instead of creating a branch-off font.",
+    )
+    patch_parser.add_argument(
+        "--backup-dir",
+        type=Path,
+        help="Directory for in-place backups. Defaults to the font directory.",
+    )
+    patch_parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Do not create a backup before in-place patching.",
     )
     patch_parser.add_argument(
         "--manifest-path",
@@ -84,6 +104,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Load a manifest from this path instead of the packaged manifest.",
     )
     inspect_parser.set_defaults(handler=handle_inspect)
+
+    restore_parser = subparsers.add_parser(
+        "restore",
+        help="Restore a font from an agent-font-patcher backup.",
+    )
+    restore_parser.add_argument("font_path", type=Path)
+    restore_parser.add_argument(
+        "--backup-dir",
+        type=Path,
+        help="Directory containing the backup. Defaults to the font directory.",
+    )
+    restore_parser.set_defaults(handler=handle_restore)
     return parser
 
 
@@ -143,14 +175,35 @@ def handle_scan(args: argparse.Namespace) -> int:
 
 
 def handle_patch(args: argparse.Namespace) -> int:
+    if args.in_place:
+        if args.output_dir is not None:
+            raise PatchError("--output-dir cannot be used with --in-place")
+        if args.no_backup and args.backup_dir is not None:
+            raise PatchError("--backup-dir cannot be used with --no-backup")
+    else:
+        if args.output_dir is None:
+            raise PatchError("--output-dir is required unless --in-place is used")
+        if args.no_backup or args.backup_dir is not None:
+            raise PatchError("--backup-dir and --no-backup require --in-place")
+
     manifest = load_manifest(args.manifest_path)
-    result = patch_font_branch(
-        args.font_path,
-        args.output_dir,
-        manifest,
-        use_placeholder_glyphs=args.use_placeholder_glyphs,
-        asset_base_dir=args.manifest_path.parent,
-    )
+    if args.in_place:
+        result = patch_font_in_place(
+            args.font_path,
+            manifest,
+            use_placeholder_glyphs=args.use_placeholder_glyphs,
+            asset_base_dir=args.manifest_path.parent,
+            create_backup=not args.no_backup,
+            backup_dir=args.backup_dir,
+        )
+    else:
+        result = patch_font_branch(
+            args.font_path,
+            args.output_dir,
+            manifest,
+            use_placeholder_glyphs=args.use_placeholder_glyphs,
+            asset_base_dir=args.manifest_path.parent,
+        )
     print_patch_result(result)
     return 0
 
@@ -160,9 +213,18 @@ def print_patch_result(result: PatchResult) -> None:
     print(f"output: {result.output_path}")
     print(f"manifest: {result.metadata['manifest_version']}")
     print(f"placeholder_glyphs: {'yes' if result.metadata['placeholder_glyphs'] else 'no'}")
+    if result.backup_path is not None:
+        print(f"backup: {result.backup_path}")
     print(f"patched_codepoints: {len(result.patched_codepoints)}")
     for codepoint in result.patched_codepoints:
         print(f"  {codepoint}")
+
+
+def handle_restore(args: argparse.Namespace) -> int:
+    backup_path = restore_font_backup(args.font_path, backup_dir=args.backup_dir)
+    print(f"restored: {args.font_path}")
+    print(f"backup: {backup_path}")
+    return 0
 
 
 def handle_inspect(args: argparse.Namespace) -> int:

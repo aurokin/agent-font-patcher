@@ -3,6 +3,8 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
+import stat
 import struct
 import tempfile
 import unittest
@@ -13,14 +15,16 @@ from unittest import mock
 from fontTools.ttLib import TTCollection, TTFont
 from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
 
-from agent_font_patcher.cli import handle_inspect, handle_patch
+from agent_font_patcher.cli import handle_inspect, handle_patch, handle_restore
 from agent_font_patcher.inspector import inspect_agent_font
 from agent_font_patcher.manifest import Manifest, parse_manifest
 from agent_font_patcher.patcher import (
     PatchError,
     _best_unicode_cmap,
     patch_font_branch,
+    patch_font_in_place,
     read_patch_metadata,
+    restore_font_backup,
 )
 from agent_font_patcher.scanner import inspect_font, read_font_codepoints
 from tests.test_scanner import _write_minimal_font
@@ -96,6 +100,9 @@ class PatcherTest(unittest.TestCase):
                         output_dir=output_dir,
                         manifest_path=manifest_path,
                         use_placeholder_glyphs=True,
+                        in_place=False,
+                        backup_dir=None,
+                        no_backup=False,
                     )
                 )
 
@@ -105,6 +112,512 @@ class PatcherTest(unittest.TestCase):
         self.assertIn(f"output: {output_dir / 'ExampleNerdFont-Regular-Agent.ttf'}", output)
         self.assertIn("placeholder_glyphs: yes", output)
         self.assertIn("patched_codepoints: 1", output)
+
+    def test_patch_font_in_place_preserves_names_and_creates_backup(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            original_bytes = source_path.read_bytes()
+
+            result = patch_font_in_place(
+                source_path,
+                manifest,
+                use_placeholder_glyphs=True,
+            )
+            candidate = inspect_font(source_path)
+            codepoints = read_font_codepoints(source_path)
+            metadata = read_patch_metadata(source_path)
+            backup_bytes = result.backup_path.read_bytes() if result.backup_path else None
+
+        self.assertEqual(result.output_path, source_path)
+        self.assertEqual(result.backup_path, source_path.with_name(f"{source_path.name}.agent-font-patcher-backup"))
+        self.assertEqual(backup_bytes, original_bytes)
+        self.assertEqual(candidate.family, "Example Nerd Font")
+        self.assertEqual(candidate.full_name, "Example Nerd Font Regular")
+        self.assertIn(0x100000, codepoints.codepoints)
+        self.assertIsNotNone(metadata)
+        self.assertEqual(metadata["source_font_name"], "Example Nerd Font Regular")
+
+    def test_patch_font_in_place_can_skip_backup(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_in_place(
+                source_path,
+                manifest,
+                use_placeholder_glyphs=True,
+                create_backup=False,
+            )
+            backup_exists = source_path.with_name(f"{source_path.name}.agent-font-patcher-backup").exists()
+
+        self.assertIsNone(result.backup_path)
+        self.assertFalse(backup_exists)
+
+    def test_patch_font_in_place_uses_backup_dir(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            backup_dir = root / "backups"
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            original_bytes = source_path.read_bytes()
+
+            result = patch_font_in_place(
+                source_path,
+                manifest,
+                use_placeholder_glyphs=True,
+                backup_dir=backup_dir,
+            )
+            backup_bytes = result.backup_path.read_bytes() if result.backup_path else None
+
+        self.assertEqual(result.backup_path, backup_dir / f"{source_path.name}.agent-font-patcher-backup")
+        self.assertEqual(backup_bytes, original_bytes)
+
+    def test_patch_font_in_place_preserves_source_mode(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            source_path.chmod(0o644)
+
+            patch_font_in_place(
+                source_path,
+                manifest,
+                use_placeholder_glyphs=True,
+                create_backup=False,
+            )
+            patched_mode = stat.S_IMODE(source_path.stat().st_mode)
+
+        self.assertEqual(patched_mode, 0o644)
+
+    def test_patch_font_in_place_preserves_source_owner_when_permitted(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            source_stat = source_path.stat()
+
+            with mock.patch("agent_font_patcher.patcher.os.chown") as chown:
+                patch_font_in_place(
+                    source_path,
+                    manifest,
+                    use_placeholder_glyphs=True,
+                    create_backup=False,
+                )
+
+        self.assertTrue(
+            any(call.args[1:] == (source_stat.st_uid, source_stat.st_gid) for call in chown.call_args_list)
+        )
+
+    def test_patch_font_in_place_fails_when_source_owner_cannot_be_preserved(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            source_stat = source_path.stat()
+            mismatched_stat = mock.Mock(st_uid=source_stat.st_uid + 1, st_gid=source_stat.st_gid)
+
+            def fake_stat(path: Path, *args: object, **kwargs: object) -> object:
+                if path == source_path:
+                    return source_stat
+                if path.name.startswith(f".{source_path.name}."):
+                    return mismatched_stat
+                return original_stat(path, *args, **kwargs)
+
+            original_stat = Path.stat
+            with (
+                mock.patch("agent_font_patcher.patcher.os.chown", side_effect=PermissionError("denied")),
+                mock.patch.object(Path, "stat", autospec=True, side_effect=fake_stat),
+                self.assertRaisesRegex(PatchError, "unable to patch font"),
+            ):
+                patch_font_in_place(
+                    source_path,
+                    manifest,
+                    use_placeholder_glyphs=True,
+                    create_backup=False,
+                )
+
+    def test_patch_font_in_place_ignores_chown_denial_when_owner_already_matches(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            source_stat = source_path.stat()
+
+            with (
+                mock.patch("agent_font_patcher.patcher.os.chown", side_effect=PermissionError("denied")),
+                mock.patch.object(Path, "stat", autospec=True, return_value=source_stat),
+            ):
+                result = patch_font_in_place(
+                    source_path,
+                    manifest,
+                    use_placeholder_glyphs=True,
+                    create_backup=False,
+                )
+
+        self.assertEqual(result.output_path, source_path)
+
+    def test_patch_font_in_place_allows_platforms_without_chown(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with mock.patch("agent_font_patcher.patcher.os.chown", new=None):
+                result = patch_font_in_place(
+                    source_path,
+                    manifest,
+                    use_placeholder_glyphs=True,
+                    create_backup=False,
+                )
+
+        self.assertEqual(result.output_path, source_path)
+
+    def test_patch_font_in_place_requires_writable_font_directory_before_backup(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            backup_dir = root / "backups"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            def fake_access(path: Path, mode: int) -> bool:
+                if mode == os.W_OK and path == source_path.parent:
+                    return False
+                return True
+
+            with (
+                mock.patch("agent_font_patcher.patcher.os.access", side_effect=fake_access),
+                self.assertRaisesRegex(PatchError, "font directory is not writable"),
+            ):
+                patch_font_in_place(
+                    source_path,
+                    manifest,
+                    use_placeholder_glyphs=True,
+                    backup_dir=backup_dir,
+                )
+
+        self.assertFalse(backup_dir.exists())
+
+    def test_patch_font_in_place_refuses_existing_backup(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            backup_path = source_path.with_name(f"{source_path.name}.agent-font-patcher-backup")
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            backup_path.write_bytes(b"existing")
+
+            with self.assertRaisesRegex(PatchError, "backup already exists"):
+                patch_font_in_place(
+                    source_path,
+                    manifest,
+                    use_placeholder_glyphs=True,
+                )
+
+    def test_patch_font_in_place_rejects_dangling_symlink_before_open(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            source_path.symlink_to(root / "missing.ttf")
+
+            with self.assertRaisesRegex(PatchError, "symlinked"):
+                patch_font_in_place(
+                    source_path,
+                    manifest,
+                    use_placeholder_glyphs=True,
+                )
+
+    def test_patch_font_in_place_removes_backup_when_replace_fails(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            backup_path = source_path.with_name(f"{source_path.name}.agent-font-patcher-backup")
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            original_bytes = source_path.read_bytes()
+
+            with (
+                mock.patch("agent_font_patcher.patcher._save_font_replace", side_effect=OSError("boom")),
+                self.assertRaisesRegex(PatchError, "unable to patch font"),
+            ):
+                patch_font_in_place(
+                    source_path,
+                    manifest,
+                    use_placeholder_glyphs=True,
+                )
+
+            self.assertFalse(backup_path.exists())
+            self.assertEqual(source_path.read_bytes(), original_bytes)
+
+    def test_restore_font_backup_restores_original_font(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            original_bytes = source_path.read_bytes()
+            patch_font_in_place(
+                source_path,
+                manifest,
+                use_placeholder_glyphs=True,
+            )
+
+            backup_path = restore_font_backup(source_path)
+            restored_bytes = source_path.read_bytes()
+            codepoints = read_font_codepoints(source_path)
+
+        self.assertEqual(backup_path, source_path.with_name(f"{source_path.name}.agent-font-patcher-backup"))
+        self.assertEqual(restored_bytes, original_bytes)
+        self.assertNotIn(0x100000, codepoints.codepoints)
+
+    def test_restore_font_backup_wraps_io_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            backup_path = source_path.with_name(f"{source_path.name}.agent-font-patcher-backup")
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            backup_path.mkdir()
+
+            with self.assertRaisesRegex(PatchError, "unable to restore font"):
+                restore_font_backup(source_path)
+
+    def test_restore_command_prints_restored_path(self) -> None:
+        manifest = _available_icon_manifest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            patch_font_in_place(
+                source_path,
+                manifest,
+                use_placeholder_glyphs=True,
+            )
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = handle_restore(SimpleNamespace(font_path=source_path, backup_dir=None))
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        self.assertIn(f"restored: {source_path}", output)
+        self.assertIn("backup:", output)
+
+    def test_patch_command_can_patch_in_place(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=None,
+                        manifest_path=manifest_path,
+                        use_placeholder_glyphs=True,
+                        in_place=True,
+                        backup_dir=None,
+                        no_backup=False,
+                    )
+                )
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        self.assertIn(f"output: {source_path}", output)
+        self.assertIn("backup:", output)
+        self.assertIn("patched_codepoints: 1", output)
+
+    def test_patch_command_requires_output_dir_for_branch_mode(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            with self.assertRaisesRegex(PatchError, "output-dir"):
+                handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=None,
+                        manifest_path=manifest_path,
+                        use_placeholder_glyphs=True,
+                        in_place=False,
+                        backup_dir=None,
+                        no_backup=False,
+                    )
+                )
+
+    def test_patch_command_validates_flags_before_manifest_loading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            with mock.patch("agent_font_patcher.cli.load_manifest") as load_manifest_mock:
+                with self.assertRaisesRegex(PatchError, "output-dir"):
+                    handle_patch(
+                        SimpleNamespace(
+                            font_path=root / "ExampleNerdFont-Regular.ttf",
+                            output_dir=None,
+                            manifest_path=root / "missing.json",
+                            use_placeholder_glyphs=True,
+                            in_place=False,
+                            backup_dir=None,
+                            no_backup=False,
+                        )
+                    )
+
+        load_manifest_mock.assert_not_called()
+
+    def test_patch_command_rejects_output_dir_for_in_place_mode(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            with self.assertRaisesRegex(PatchError, "output-dir"):
+                handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=root / "out",
+                        manifest_path=manifest_path,
+                        use_placeholder_glyphs=True,
+                        in_place=True,
+                        backup_dir=None,
+                        no_backup=False,
+                    )
+                )
+
+    def test_patch_command_rejects_backup_dir_with_no_backup(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            with self.assertRaisesRegex(PatchError, "backup-dir"):
+                handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=None,
+                        manifest_path=manifest_path,
+                        use_placeholder_glyphs=True,
+                        in_place=True,
+                        backup_dir=root / "backups",
+                        no_backup=True,
+                    )
+                )
 
     def test_inspect_prints_embedded_patch_range_and_icon_count(self) -> None:
         manifest = _available_icon_manifest()
