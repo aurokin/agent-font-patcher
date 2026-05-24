@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from agent_font_patcher.manifest import Manifest, ManifestError, load_manifest
+from agent_font_patcher.scanner import scan_fonts
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,6 +34,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="List every icon in the manifest.",
     )
     manifest_parser.set_defaults(handler=handle_manifest)
+
+    scan_parser = subparsers.add_parser(
+        "scan",
+        help="Find likely installed Nerd Font files.",
+    )
+    scan_parser.add_argument(
+        "--font-dir",
+        action="append",
+        type=Path,
+        help="Directory to scan. Can be passed more than once.",
+    )
+    scan_parser.set_defaults(handler=handle_scan)
     return parser
 
 
@@ -77,6 +90,18 @@ def print_manifest_icons(manifest: Manifest) -> None:
             f"{icon.codepoint} {icon.character} {icon.id} "
             f"({icon.display_name}){aliases}{status}"
         )
+
+
+def handle_scan(args: argparse.Namespace) -> int:
+    candidates = scan_fonts(args.font_dir)
+    if not candidates:
+        print("No likely Nerd Font files found.")
+        return 0
+    for candidate in candidates:
+        writable = "writable" if candidate.is_writable else "read-only"
+        name = candidate.full_name or candidate.family or candidate.path.stem
+        print(f"{candidate.path}\n  name: {name}\n  access: {writable}\n  reason: {candidate.reason}")
+    return 0
 
 
 if __name__ == "__main__":

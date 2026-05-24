@@ -76,6 +76,11 @@ agent-font-patcher preview <font-path>
 whether they appear writable, and whether they already contain this project's
 agent glyph metadata.
 
+The first scanner implementation is read-only. It searches common platform font
+directories and uses font metadata to identify likely Nerd Fonts. It should
+prefer false negatives over accidentally treating unrelated fonts as patch
+targets.
+
 `patch` should treat single-font and multi-font runs as the same operation over
 a list of targets. For multi-font runs, patch every file first and refresh font
 caches once at the end.
@@ -135,4 +140,3 @@ against current Nerd Fonts allocations and document the reserved range.
 - Do not make this project the rendering path for GUI apps that can use SVG.
 - Do not silently mutate package-managed fonts without an explicit in-place
   request.
-
