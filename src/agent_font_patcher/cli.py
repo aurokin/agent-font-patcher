@@ -5,6 +5,7 @@ from pathlib import Path
 
 from agent_font_patcher.inspector import FontInspection, inspect_agent_font
 from agent_font_patcher.manifest import Manifest, ManifestError, load_manifest
+from agent_font_patcher.patcher import PatchError, PatchResult, patch_font_branch
 from agent_font_patcher.scanner import scan_fonts
 
 
@@ -48,6 +49,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan_parser.set_defaults(handler=handle_scan)
 
+    patch_parser = subparsers.add_parser(
+        "patch",
+        help="Create a branch-off font from an explicit glyph manifest.",
+    )
+    patch_parser.add_argument("font_path", type=Path)
+    patch_parser.add_argument(
+        "--output-dir",
+        required=True,
+        type=Path,
+        help="Directory where the patched branch-off font will be written.",
+    )
+    patch_parser.add_argument(
+        "--manifest-path",
+        required=True,
+        type=Path,
+        help="Load a manifest with available glyph assets.",
+    )
+    patch_parser.add_argument(
+        "--use-placeholder-glyphs",
+        action="store_true",
+        help="Use generated placeholder glyphs until SVG asset ingestion is available.",
+    )
+    patch_parser.set_defaults(handler=handle_patch)
+
     inspect_parser = subparsers.add_parser(
         "inspect",
         help="Inspect one font and report agent glyph coverage.",
@@ -70,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     try:
         return args.handler(args)
-    except ManifestError as error:
+    except (ManifestError, PatchError) as error:
         parser.error(str(error))
     return 0
 
@@ -117,6 +142,28 @@ def handle_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_patch(args: argparse.Namespace) -> int:
+    manifest = load_manifest(args.manifest_path)
+    result = patch_font_branch(
+        args.font_path,
+        args.output_dir,
+        manifest,
+        use_placeholder_glyphs=args.use_placeholder_glyphs,
+    )
+    print_patch_result(result)
+    return 0
+
+
+def print_patch_result(result: PatchResult) -> None:
+    print(f"source: {result.source_path}")
+    print(f"output: {result.output_path}")
+    print(f"manifest: {result.metadata['manifest_version']}")
+    print(f"placeholder_glyphs: {'yes' if result.metadata['placeholder_glyphs'] else 'no'}")
+    print(f"patched_codepoints: {len(result.patched_codepoints)}")
+    for codepoint in result.patched_codepoints:
+        print(f"  {codepoint}")
+
+
 def handle_inspect(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.manifest_path)
     inspection = inspect_agent_font(args.font_path, manifest)
@@ -135,6 +182,15 @@ def print_font_inspection(inspection: FontInspection) -> None:
     print(f"likely_nerd_font: {'yes' if candidate.is_likely_nerd_font else 'no'}")
     print(f"reason: {candidate.reason}")
     print(f"manifest: {inspection.manifest.manifest_version}")
+    print(f"patched: {'yes' if inspection.patch_metadata else 'no'}")
+    if inspection.patch_metadata:
+        print(f"patcher_version: {inspection.patch_metadata.get('patcher_version', 'unknown')}")
+        print(f"patched_manifest: {inspection.patch_metadata.get('manifest_version', 'unknown')}")
+        print(f"placeholder_glyphs: {inspection.patch_metadata.get('placeholder_glyphs', 'unknown')}")
+        print(f"patched_range: {inspection.patch_metadata.get('codepoint_range', 'unknown')}")
+        print(f"patched_icons: {len(inspection.patch_metadata.get('patched_codepoints', []))}")
+        print(f"source_font: {inspection.patch_metadata.get('source_font_name', 'unknown')}")
+        print(f"source_hash: {inspection.patch_metadata.get('source_font_hash', 'unknown')}")
     if inspection.codepoints_error:
         print(f"agent_codepoints: unreadable ({inspection.codepoints_error})")
         return

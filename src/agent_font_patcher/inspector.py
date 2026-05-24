@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from agent_font_patcher.manifest import Icon, Manifest, codepoint_to_int, load_manifest
+from agent_font_patcher.patcher import read_patch_metadata
 from agent_font_patcher.scanner import FontCandidate, inspect_font, read_font_codepoints
 
 
@@ -20,6 +22,7 @@ class FontInspection:
     icon_coverage: tuple[IconCoverage, ...]
     codepoints_error: str | None
     reserved_coverage: tuple[IconCoverage, ...] = ()
+    patch_metadata: dict[str, Any] | None = None
 
     @property
     def present_icons(self) -> tuple[IconCoverage, ...]:
@@ -62,4 +65,5 @@ def inspect_agent_font(path: Path, manifest: Manifest | None = None) -> FontInsp
         icon_coverage=icon_coverage,
         codepoints_error=codepoint_result.error,
         reserved_coverage=reserved_coverage,
+        patch_metadata=read_patch_metadata(path),
     )
