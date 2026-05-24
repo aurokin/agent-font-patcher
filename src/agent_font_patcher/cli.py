@@ -141,10 +141,19 @@ def print_font_inspection(inspection: FontInspection) -> None:
 
     present = inspection.present_icons
     missing = inspection.missing_icons
-    print(f"agent_codepoints: {len(present)}/{len(inspection.icon_coverage)} present")
+    reserved = inspection.occupied_reserved_codepoints
+    legacy_present = len(present) + len(reserved)
+    legacy_total = len(inspection.icon_coverage) + len(inspection.reserved_coverage)
+    print(f"agent_codepoints: {legacy_present}/{legacy_total} present")
+    print(f"available_agent_glyphs: {len(present)}/{len(inspection.icon_coverage)} present")
+    print(f"reserved_codepoints: {len(reserved)}/{len(inspection.reserved_coverage)} occupied")
     if present:
         print("present:")
         for coverage in present:
+            print(f"  {coverage.icon.codepoint} {coverage.icon.id}")
+    if reserved:
+        print("reserved_occupied:")
+        for coverage in reserved:
             print(f"  {coverage.icon.codepoint} {coverage.icon.id}")
     if missing:
         print("missing:")

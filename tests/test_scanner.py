@@ -4,6 +4,7 @@ import tempfile
 import struct
 import unittest
 import zlib
+from dataclasses import fields
 from unittest import mock
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTCollection, TTFont
 
 from agent_font_patcher.scanner import (
+    FontCandidate,
+    _read_font_codepoints_for_face,
     default_font_dirs,
     discover_font_files,
     inspect_font,
@@ -138,6 +141,117 @@ class ScannerTest(unittest.TestCase):
 
         self.assertIsNone(result.error)
         self.assertNotIn(0x100000, result.codepoints)
+
+    def test_read_font_codepoints_for_face_does_not_require_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            regular_path = root / "Regular.ttf"
+            broken_metadata_path = root / "NoName.ttf"
+            collection_path = root / "Collection.ttc"
+            _write_minimal_font(regular_path, family="Example", full_name="Example Regular")
+            _write_minimal_font(
+                broken_metadata_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font",
+                extra_codepoints={0x100000: "agent_icon"},
+            )
+            broken_metadata = TTFont(broken_metadata_path)
+            del broken_metadata["name"]
+            broken_metadata.save(broken_metadata_path)
+            broken_metadata.close()
+            collection = TTCollection()
+            collection.fonts = [TTFont(regular_path), TTFont(broken_metadata_path)]
+            collection.save(collection_path)
+            regular_path.unlink()
+            broken_metadata_path.unlink()
+
+            result = _read_font_codepoints_for_face(collection_path, 1)
+
+        self.assertIsNone(result.error)
+        self.assertIn(0x100000, result.codepoints)
+
+    def test_font_candidate_accepts_original_positional_shape(self) -> None:
+        candidate = FontCandidate(
+            Path("Example.ttf"),
+            "Example",
+            "Regular",
+            "Example Regular",
+            "Example-Regular",
+            True,
+            False,
+            "reason",
+        )
+
+        self.assertTrue(candidate.is_readable)
+        self.assertFalse(candidate.is_writable)
+        self.assertEqual(candidate.reason, "reason")
+
+    def test_font_candidate_accepts_readability_positional_shape(self) -> None:
+        candidate = FontCandidate(
+            Path("Example.ttf"),
+            "Example",
+            "Regular",
+            "Example Regular",
+            "Example-Regular",
+            True,
+            False,
+            True,
+            "reason",
+        )
+
+        self.assertFalse(candidate.is_readable)
+        self.assertTrue(candidate.is_writable)
+        self.assertEqual(candidate.reason, "reason")
+
+    def test_font_candidate_accepts_mixed_readability_positional_shape(self) -> None:
+        candidate = FontCandidate(
+            Path("Example.ttf"),
+            "Example",
+            "Regular",
+            "Example Regular",
+            "Example-Regular",
+            True,
+            False,
+            is_writable=True,
+            reason="reason",
+        )
+
+        self.assertFalse(candidate.is_readable)
+        self.assertTrue(candidate.is_writable)
+        self.assertEqual(candidate.reason, "reason")
+
+    def test_font_candidate_preserves_committed_field_order(self) -> None:
+        field_names = [field.name for field in fields(FontCandidate)]
+
+        self.assertEqual(field_names[-3:], ["is_readable", "is_writable", "reason"])
+
+    def test_font_candidate_preserves_legacy_match_positions(self) -> None:
+        self.assertEqual(FontCandidate.__match_args__[-3:], ("is_writable", "reason", "is_readable"))
+
+    def test_read_font_codepoints_falls_back_to_ttc_cmap_when_metadata_is_unreadable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            broken_metadata_path = root / "NoName.ttf"
+            collection_path = root / "Collection.ttc"
+            _write_minimal_font(
+                broken_metadata_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font",
+                extra_codepoints={0x100000: "agent_icon"},
+            )
+            broken_metadata = TTFont(broken_metadata_path)
+            del broken_metadata["name"]
+            broken_metadata.save(broken_metadata_path)
+            broken_metadata.close()
+            collection = TTCollection()
+            collection.fonts = [TTFont(broken_metadata_path)]
+            collection.save(collection_path)
+            broken_metadata_path.unlink()
+
+            result = read_font_codepoints(collection_path)
+
+        self.assertIsNone(result.error)
+        self.assertIn(0x100000, result.codepoints)
 
     def test_read_font_codepoints_treats_empty_ttc_as_unreadable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -24,7 +24,7 @@ FONT_PARSE_ERRORS = (
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class FontCandidate:
     path: Path
     family: str | None
@@ -35,6 +35,92 @@ class FontCandidate:
     is_readable: bool
     is_writable: bool
     reason: str
+
+    __match_args__ = (
+        "path",
+        "family",
+        "subfamily",
+        "full_name",
+        "postscript_name",
+        "is_likely_nerd_font",
+        "is_writable",
+        "reason",
+        "is_readable",
+    )
+
+    def __init__(
+        self,
+        path: Path,
+        family: str | None,
+        subfamily: str | None,
+        full_name: str | None,
+        postscript_name: str | None,
+        is_likely_nerd_font: bool,
+        *args: object,
+        is_writable: bool | None = None,
+        reason: str | None = None,
+        is_readable: bool | None = None,
+    ) -> None:
+        parsed_is_writable: object
+        parsed_reason: object
+        parsed_is_readable: object
+        if len(args) == 0:
+            if is_writable is None or reason is None:
+                raise TypeError("FontCandidate missing is_writable or reason")
+            parsed_is_writable = is_writable
+            parsed_reason = reason
+            parsed_is_readable = True if is_readable is None else is_readable
+        elif len(args) == 1:
+            (first,) = args
+            if is_writable is not None:
+                if is_readable is not None:
+                    raise TypeError("FontCandidate got multiple values for is_readable")
+                if reason is None:
+                    raise TypeError("FontCandidate missing reason")
+                parsed_is_readable = first
+                parsed_is_writable = is_writable
+                parsed_reason = reason
+            else:
+                if reason is None:
+                    raise TypeError("FontCandidate missing reason")
+                parsed_is_writable = first
+                parsed_reason = reason
+                parsed_is_readable = True if is_readable is None else is_readable
+        elif len(args) == 2:
+            first, second = args
+            if reason is not None:
+                if is_readable is not None or is_writable is not None:
+                    raise TypeError("FontCandidate positional and keyword fields overlap")
+                parsed_is_readable = first
+                parsed_is_writable = second
+                parsed_reason = reason
+            else:
+                if is_readable is not None or is_writable is not None:
+                    raise TypeError("FontCandidate positional and keyword fields overlap")
+                if isinstance(second, str):
+                    parsed_is_writable = first
+                    parsed_reason = second
+                    parsed_is_readable = True
+                elif isinstance(second, bool):
+                    raise TypeError("FontCandidate missing reason")
+                else:
+                    raise TypeError("FontCandidate missing reason")
+        elif len(args) == 3:
+            if is_readable is not None or is_writable is not None or reason is not None:
+                raise TypeError("FontCandidate positional and keyword fields overlap")
+            parsed_is_readable, parsed_is_writable, parsed_reason = args
+        else:
+            raise TypeError(f"FontCandidate expected 8 or 9 positional arguments, got {6 + len(args)}")
+
+        object.__setattr__(self, "path", path)
+        object.__setattr__(self, "family", family)
+        object.__setattr__(self, "subfamily", subfamily)
+        object.__setattr__(self, "full_name", full_name)
+        object.__setattr__(self, "postscript_name", postscript_name)
+        object.__setattr__(self, "is_likely_nerd_font", is_likely_nerd_font)
+        object.__setattr__(self, "is_readable", parsed_is_readable)
+        object.__setattr__(self, "is_writable", parsed_is_writable)
+        object.__setattr__(self, "reason", parsed_reason)
 
 
 @dataclass(frozen=True)
@@ -116,6 +202,10 @@ def read_font_codepoints(path: Path) -> CodepointReadResult:
     return _read_single_font_codepoints(path)
 
 
+def _read_font_codepoints_for_face(path: Path, font_number: int) -> CodepointReadResult:
+    return _read_single_font_codepoints(path, font_number=font_number)
+
+
 def _inspect_collection(path: Path) -> FontCandidate:
     return _select_collection_face(path).candidate
 
@@ -148,19 +238,31 @@ def _select_collection_face(path: Path) -> CollectionFaceSelection:
 def _read_collection_codepoints(path: Path) -> CodepointReadResult:
     selection = _select_collection_face(path)
     if selection.index is None:
-        return CodepointReadResult(frozenset(), selection.candidate.reason)
+        return _read_all_collection_codepoints(path)
+    return _read_font_codepoints_for_face(path, selection.index)
+
+
+def _read_all_collection_codepoints(path: Path) -> CodepointReadResult:
     try:
         with path.open("rb") as font_file:
-            font = TTFont(font_file, lazy=False, fontNumber=selection.index)
+            collection = TTCollection(font_file)
     except FONT_PARSE_ERRORS as error:
         return CodepointReadResult(frozenset(), str(error))
 
+    if not collection.fonts:
+        return CodepointReadResult(frozenset(), "empty font collection")
+
+    codepoints: set[int] = set()
     try:
-        return CodepointReadResult(frozenset(_read_cmap_codepoints(font)))
+        for font in collection.fonts:
+            codepoints.update(_read_cmap_codepoints(font))
     except FONT_PARSE_ERRORS as error:
         return CodepointReadResult(frozenset(), str(error))
     finally:
-        font.close()
+        for font in collection.fonts:
+            font.close()
+
+    return CodepointReadResult(frozenset(codepoints))
 
 
 def _inspect_single_font(path: Path) -> FontCandidate:
@@ -181,11 +283,11 @@ def _inspect_single_font(path: Path) -> FontCandidate:
         font.close()
 
 
-def _read_single_font_codepoints(path: Path) -> CodepointReadResult:
+def _read_single_font_codepoints(path: Path, font_number: int = 0) -> CodepointReadResult:
     font: TTFont | None = None
     try:
         with path.open("rb") as font_file:
-            font = TTFont(font_file, lazy=False, fontNumber=0)
+            font = TTFont(font_file, lazy=False, fontNumber=font_number)
     except FONT_PARSE_ERRORS as error:
         if font is not None:
             font.close()

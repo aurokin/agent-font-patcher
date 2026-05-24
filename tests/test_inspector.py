@@ -10,8 +10,9 @@ from types import SimpleNamespace
 from fontTools.ttLib import TTFont
 
 from agent_font_patcher.cli import handle_inspect
-from agent_font_patcher.inspector import inspect_agent_font
-from agent_font_patcher.manifest import load_manifest
+from agent_font_patcher.inspector import FontInspection, inspect_agent_font
+from agent_font_patcher.manifest import Manifest, load_manifest, parse_manifest
+from agent_font_patcher.scanner import FontCandidate
 from tests.test_scanner import _write_minimal_font
 
 
@@ -34,8 +35,9 @@ class InspectorTest(unittest.TestCase):
 
         self.assertIsNone(inspection.codepoints_error)
         self.assertTrue(inspection.candidate.is_likely_nerd_font)
-        self.assertEqual(len(inspection.present_icons), 1)
-        self.assertEqual(inspection.present_icons[0].icon.id, first_icon.id)
+        self.assertEqual(inspection.present_icons, ())
+        self.assertEqual(len(inspection.occupied_reserved_codepoints), 1)
+        self.assertEqual(inspection.occupied_reserved_codepoints[0].icon.id, first_icon.id)
 
     def test_inspect_agent_font_reports_codepoint_read_errors(self) -> None:
         manifest = load_manifest()
@@ -68,3 +70,96 @@ class InspectorTest(unittest.TestCase):
         self.assertFalse(inspection.candidate.is_readable)
         self.assertIsNone(inspection.codepoints_error)
         self.assertEqual(exit_code, 1)
+
+    def test_inspect_output_reports_reserved_hits_separately(self) -> None:
+        manifest = load_manifest()
+        first_icon = manifest.icons[0]
+        codepoint = int(first_icon.codepoint[2:], 16)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            font_path = Path(tmp) / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                font_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font",
+                extra_codepoints={codepoint: "reserved_slot"},
+            )
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = handle_inspect(SimpleNamespace(manifest_path=None, font_path=font_path))
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        self.assertIn("agent_codepoints: 1/10 present", output)
+        self.assertIn("available_agent_glyphs: 0/0 present", output)
+        self.assertIn("reserved_codepoints: 1/10 occupied", output)
+        self.assertIn(f"{first_icon.codepoint} {first_icon.id}", output)
+
+    def test_deprecated_manifest_entries_count_as_reserved_occupancy(self) -> None:
+        manifest = _single_icon_manifest(asset_status="deprecated")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            font_path = Path(tmp) / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                font_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font",
+                extra_codepoints={0x100000: "deprecated_slot"},
+            )
+
+            inspection = inspect_agent_font(font_path, manifest)
+
+        self.assertEqual(inspection.present_icons, ())
+        self.assertEqual(len(inspection.occupied_reserved_codepoints), 1)
+
+    def test_font_inspection_accepts_original_positional_shape(self) -> None:
+        manifest = load_manifest()
+        candidate = FontCandidate(
+            Path("Example.ttf"),
+            "Example",
+            "Regular",
+            "Example Regular",
+            "Example-Regular",
+            True,
+            True,
+            "reason",
+        )
+
+        inspection = FontInspection(candidate, manifest, (), None)
+
+        self.assertEqual(inspection.codepoints_error, None)
+        self.assertEqual(inspection.reserved_coverage, ())
+
+
+def _single_icon_manifest(asset_status: str) -> Manifest:
+    return parse_manifest(
+        {
+            "schema_version": 1,
+            "manifest_version": "test",
+            "project": "agent-font-patcher",
+            "range": {
+                "start": "U+100000",
+                "end": "U+1000FF",
+                "description": "test",
+            },
+            "blocks": [
+                {
+                    "name": "providers",
+                    "start": "U+100000",
+                    "end": "U+10003F",
+                    "description": "test",
+                }
+            ],
+            "icons": [
+                {
+                    "id": "test-icon",
+                    "display_name": "Test Icon",
+                    "aliases": [],
+                    "category": "providers",
+                    "codepoint": "U+100000",
+                    "asset_status": asset_status,
+                }
+            ],
+        }
+    )
