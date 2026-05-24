@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "manifest_version": "agent-icons-v1",
+  "project": "agent-font-patcher",
+  "range": {
+    "start": "U+100000",
+    "end": "U+1000FF",
+    "description": "Supplementary Private Use Area-B block reserved for agent tooling glyphs."
+  },
+  "blocks": [
+    {
+      "name": "providers",
+      "start": "U+100000",
+      "end": "U+10003F",
+      "description": "Providers, labs, and model brands."
+    },
+    {
+      "name": "coding_agents",
+      "start": "U+100040",
+      "end": "U+10007F",
+      "description": "Coding agents, editor assistants, and terminal agent tools."
+    },
+    {
+      "name": "protocols",
+      "start": "U+100080",
+      "end": "U+1000BF",
+      "description": "Protocols, orchestration frameworks, and agent infrastructure."
+    },
+    {
+      "name": "runtimes_status",
+      "start": "U+1000C0",
+      "end": "U+1000FF",
+      "description": "Local runtimes and terminal status glyphs."
+    }
+  ],
+  "icons": [
+    {
+      "id": "anthropic",
+      "display_name": "Anthropic",
+      "aliases": ["claude"],
+      "category": "providers",
+      "codepoint": "U+100000",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "openai",
+      "display_name": "OpenAI",
+      "aliases": ["chatgpt"],
+      "category": "providers",
+      "codepoint": "U+100001",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "gemini",
+      "display_name": "Gemini",
+      "aliases": ["google-gemini"],
+      "category": "providers",
+      "codepoint": "U+100002",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "codex",
+      "display_name": "Codex",
+      "aliases": ["openai-codex"],
+      "category": "coding_agents",
+      "codepoint": "U+100040",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "claude-code",
+      "display_name": "Claude Code",
+      "aliases": ["claude"],
+      "category": "coding_agents",
+      "codepoint": "U+100041",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "cursor",
+      "display_name": "Cursor",
+      "aliases": [],
+      "category": "coding_agents",
+      "codepoint": "U+100042",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "opencode",
+      "display_name": "OpenCode",
+      "aliases": [],
+      "category": "coding_agents",
+      "codepoint": "U+100043",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "mcp",
+      "display_name": "MCP",
+      "aliases": ["model-context-protocol"],
+      "category": "protocols",
+      "codepoint": "U+100080",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "agent-active",
+      "display_name": "Agent Active",
+      "aliases": ["agent-running"],
+      "category": "runtimes_status",
+      "codepoint": "U+1000C0",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "tool-call",
+      "display_name": "Tool Call",
+      "aliases": ["tool-running"],
+      "category": "runtimes_status",
+      "codepoint": "U+1000C1",
+      "asset_status": "reserved"
+    }
+  ]
+}

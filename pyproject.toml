@@ -18,5 +18,11 @@ agent-font-patcher = "agent_font_patcher.cli:main"
 [tool.ruff]
 line-length = 100
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+agent_font_patcher = ["data/*.json"]

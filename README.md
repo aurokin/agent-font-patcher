@@ -66,6 +66,7 @@ Supported output modes:
 More detail lives in:
 
 - [docs/decisions.md](docs/decisions.md)
+- [docs/codepoints.md](docs/codepoints.md)
 - [docs/font-cache.md](docs/font-cache.md)
 - [docs/brainstorm.md](docs/brainstorm.md)
 
