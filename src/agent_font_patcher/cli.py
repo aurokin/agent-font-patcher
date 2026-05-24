@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from agent_font_patcher.inspector import FontInspection, inspect_agent_font
 from agent_font_patcher.manifest import Manifest, ManifestError, load_manifest
 from agent_font_patcher.scanner import scan_fonts
 
@@ -46,6 +47,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to scan. Can be passed more than once.",
     )
     scan_parser.set_defaults(handler=handle_scan)
+
+    inspect_parser = subparsers.add_parser(
+        "inspect",
+        help="Inspect one font and report agent glyph coverage.",
+    )
+    inspect_parser.add_argument("font_path", type=Path)
+    inspect_parser.add_argument(
+        "--manifest-path",
+        type=Path,
+        help="Load a manifest from this path instead of the packaged manifest.",
+    )
+    inspect_parser.set_defaults(handler=handle_inspect)
     return parser
 
 
@@ -102,6 +115,41 @@ def handle_scan(args: argparse.Namespace) -> int:
         name = candidate.full_name or candidate.family or candidate.path.stem
         print(f"{candidate.path}\n  name: {name}\n  access: {writable}\n  reason: {candidate.reason}")
     return 0
+
+
+def handle_inspect(args: argparse.Namespace) -> int:
+    manifest = load_manifest(args.manifest_path)
+    inspection = inspect_agent_font(args.font_path, manifest)
+    print_font_inspection(inspection)
+    return 1 if inspection.codepoints_error else 0
+
+
+def print_font_inspection(inspection: FontInspection) -> None:
+    candidate = inspection.candidate
+    print(f"path: {candidate.path}")
+    print(f"name: {candidate.full_name or candidate.family or candidate.path.stem}")
+    print(f"family: {candidate.family or 'unknown'}")
+    print(f"subfamily: {candidate.subfamily or 'unknown'}")
+    print(f"postscript: {candidate.postscript_name or 'unknown'}")
+    print(f"access: {'writable' if candidate.is_writable else 'read-only'}")
+    print(f"likely_nerd_font: {'yes' if candidate.is_likely_nerd_font else 'no'}")
+    print(f"reason: {candidate.reason}")
+    print(f"manifest: {inspection.manifest.manifest_version}")
+    if inspection.codepoints_error:
+        print(f"agent_codepoints: unreadable ({inspection.codepoints_error})")
+        return
+
+    present = inspection.present_icons
+    missing = inspection.missing_icons
+    print(f"agent_codepoints: {len(present)}/{len(inspection.icon_coverage)} present")
+    if present:
+        print("present:")
+        for coverage in present:
+            print(f"  {coverage.icon.codepoint} {coverage.icon.id}")
+    if missing:
+        print("missing:")
+        for coverage in missing:
+            print(f"  {coverage.icon.codepoint} {coverage.icon.id}")
 
 
 if __name__ == "__main__":

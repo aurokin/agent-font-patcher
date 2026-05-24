@@ -15,6 +15,7 @@ from agent_font_patcher.scanner import (
     default_font_dirs,
     discover_font_files,
     inspect_font,
+    read_font_codepoints,
     scan_fonts,
 )
 
@@ -77,6 +78,23 @@ class ScannerTest(unittest.TestCase):
         self.assertEqual(candidates[0].family, "Example Nerd Font")
         self.assertTrue(candidates[0].is_likely_nerd_font)
 
+    def test_read_font_codepoints_reports_cmap_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            font_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                font_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font",
+                extra_codepoints={0x100000: "agent_icon"},
+            )
+
+            result = read_font_codepoints(font_path)
+
+        self.assertIsNone(result.error)
+        self.assertIn(32, result.codepoints)
+        self.assertIn(0x100000, result.codepoints)
+
     def test_scan_fonts_finds_nerd_font_in_second_ttc_face(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -95,6 +113,42 @@ class ScannerTest(unittest.TestCase):
 
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].family, "Example Nerd Font")
+
+    def test_read_font_codepoints_uses_selected_ttc_face(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            regular_path = root / "Regular.ttf"
+            nerd_path = root / "Nerd.ttf"
+            collection_path = root / "Collection.ttc"
+            _write_minimal_font(
+                regular_path,
+                family="Example",
+                full_name="Example Regular",
+                extra_codepoints={0x100000: "agent_icon"},
+            )
+            _write_minimal_font(nerd_path, family="Example Nerd Font", full_name="Example Nerd Font")
+            collection = TTCollection()
+            collection.fonts = [TTFont(regular_path), TTFont(nerd_path)]
+            collection.save(collection_path)
+            regular_path.unlink()
+            nerd_path.unlink()
+
+            result = read_font_codepoints(collection_path)
+
+        self.assertIsNone(result.error)
+        self.assertNotIn(0x100000, result.codepoints)
+
+    def test_read_font_codepoints_treats_empty_ttc_as_unreadable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            collection_path = Path(tmp) / "Empty.ttc"
+            collection = TTCollection()
+            collection.fonts = []
+            collection.save(collection_path)
+
+            result = read_font_codepoints(collection_path)
+
+        self.assertIsNotNone(result.error)
+        self.assertIn("empty font collection", result.error)
 
     def test_scan_fonts_ignores_non_nerd_font(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -165,12 +219,18 @@ class ScannerTest(unittest.TestCase):
         self.assertEqual(candidates, [])
 
 
-def _write_minimal_font(path: Path, family: str, full_name: str) -> None:
-    glyph_order = [".notdef", "space"]
+def _write_minimal_font(
+    path: Path,
+    family: str,
+    full_name: str,
+    extra_codepoints: dict[int, str] | None = None,
+) -> None:
+    extra_codepoints = extra_codepoints or {}
+    glyph_order = [".notdef", "space", *extra_codepoints.values()]
     units_per_em = 1000
     builder = FontBuilder(units_per_em, isTTF=True)
     builder.setupGlyphOrder(glyph_order)
-    builder.setupCharacterMap({32: "space"})
+    builder.setupCharacterMap({32: "space", **extra_codepoints})
 
     glyphs = {}
     metrics = {}

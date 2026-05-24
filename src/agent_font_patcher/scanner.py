@@ -36,6 +36,22 @@ class FontCandidate:
     reason: str
 
 
+@dataclass(frozen=True)
+class CodepointReadResult:
+    codepoints: frozenset[int]
+    error: str | None = None
+
+    @property
+    def is_readable(self) -> bool:
+        return self.error is None
+
+
+@dataclass(frozen=True)
+class CollectionFaceSelection:
+    index: int | None
+    candidate: FontCandidate
+
+
 def default_font_dirs(platform: str | None = None) -> tuple[Path, ...]:
     platform_name = platform or sys.platform
     home = Path.home()
@@ -93,28 +109,57 @@ def inspect_font(path: Path) -> FontCandidate:
     return _inspect_single_font(path)
 
 
+def read_font_codepoints(path: Path) -> CodepointReadResult:
+    if path.suffix.lower() == ".ttc":
+        return _read_collection_codepoints(path)
+    return _read_single_font_codepoints(path)
+
+
 def _inspect_collection(path: Path) -> FontCandidate:
+    return _select_collection_face(path).candidate
+
+
+def _select_collection_face(path: Path) -> CollectionFaceSelection:
     try:
         with path.open("rb") as font_file:
             collection = TTCollection(font_file)
     except FONT_PARSE_ERRORS as error:
-        return _unreadable_candidate(path, error)
+        return CollectionFaceSelection(None, _unreadable_candidate(path, error))
 
-    first_candidate: FontCandidate | None = None
+    first_selection: CollectionFaceSelection | None = None
     try:
-        for font in collection.fonts:
+        for index, font in enumerate(collection.fonts):
             candidate = _candidate_from_font(path, font)
-            if first_candidate is None:
-                first_candidate = candidate
+            selection = CollectionFaceSelection(index, candidate)
+            if first_selection is None:
+                first_selection = selection
             if candidate.is_likely_nerd_font:
-                return candidate
+                return selection
     except FONT_PARSE_ERRORS as error:
-        return _unreadable_candidate(path, error)
+        return CollectionFaceSelection(None, _unreadable_candidate(path, error))
     finally:
         for font in collection.fonts:
             font.close()
 
-    return first_candidate or _unreadable_candidate(path, "empty font collection")
+    return first_selection or CollectionFaceSelection(None, _unreadable_candidate(path, "empty font collection"))
+
+
+def _read_collection_codepoints(path: Path) -> CodepointReadResult:
+    selection = _select_collection_face(path)
+    if selection.index is None:
+        return CodepointReadResult(frozenset(), selection.candidate.reason)
+    try:
+        with path.open("rb") as font_file:
+            font = TTFont(font_file, lazy=False, fontNumber=selection.index)
+    except FONT_PARSE_ERRORS as error:
+        return CodepointReadResult(frozenset(), str(error))
+
+    try:
+        return CodepointReadResult(frozenset(_read_cmap_codepoints(font)))
+    except FONT_PARSE_ERRORS as error:
+        return CodepointReadResult(frozenset(), str(error))
+    finally:
+        font.close()
 
 
 def _inspect_single_font(path: Path) -> FontCandidate:
@@ -131,6 +176,24 @@ def _inspect_single_font(path: Path) -> FontCandidate:
         return _candidate_from_font(path, font)
     except FONT_PARSE_ERRORS as error:
         return _unreadable_candidate(path, error)
+    finally:
+        font.close()
+
+
+def _read_single_font_codepoints(path: Path) -> CodepointReadResult:
+    font: TTFont | None = None
+    try:
+        with path.open("rb") as font_file:
+            font = TTFont(font_file, lazy=False, fontNumber=0)
+    except FONT_PARSE_ERRORS as error:
+        if font is not None:
+            font.close()
+        return CodepointReadResult(frozenset(), str(error))
+
+    try:
+        return CodepointReadResult(frozenset(_read_cmap_codepoints(font)))
+    except FONT_PARSE_ERRORS as error:
+        return CodepointReadResult(frozenset(), str(error))
     finally:
         font.close()
 
@@ -184,3 +247,11 @@ def _first_name(name_table, name_ids: tuple[int, ...]) -> str | None:
                 if value:
                     return value
     return None
+
+
+def _read_cmap_codepoints(font: TTFont) -> set[int]:
+    cmap_table = font["cmap"]
+    codepoints: set[int] = set()
+    for table in cmap_table.tables:
+        codepoints.update(table.cmap.keys())
+    return codepoints
