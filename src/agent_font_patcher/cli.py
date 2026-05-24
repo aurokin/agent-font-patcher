@@ -149,6 +149,7 @@ def handle_patch(args: argparse.Namespace) -> int:
         args.output_dir,
         manifest,
         use_placeholder_glyphs=args.use_placeholder_glyphs,
+        asset_base_dir=args.manifest_path.parent,
     )
     print_patch_result(result)
     return 0

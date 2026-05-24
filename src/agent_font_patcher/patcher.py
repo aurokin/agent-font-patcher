@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
+import re
 import struct
 import tempfile
 import zlib
@@ -11,9 +13,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from defusedxml import ElementTree as SafeElementTree
+from defusedxml.common import DefusedXmlException
+from fontTools.pens.basePen import PenError
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont, TTLibError
 from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
+from fontTools.misc.transform import Transform
+from fontTools.svgLib.path import parse_path
 
 from agent_font_patcher.manifest import Manifest, codepoint_to_int
 
@@ -37,6 +45,51 @@ PRIVATE_USE_RANGES = (
     (0x100000, 0x10FFFD),
 )
 FONT_PARSE_ERRORS = (AssertionError, TTLibError, struct.error, zlib.error)
+SVG_NUMBER_PATTERN = (
+    r"[+-]?(?:(?:(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)|"
+    r"(?:\.[0-9]+(?:[eE][+-]?[0-9]+)?))"
+)
+SVG_PATH_TOKEN_PATTERN = re.compile(
+    r"(?P<command>[MmZzLlHhVv])|"
+    rf"(?P<number>{SVG_NUMBER_PATTERN})|"
+    r"(?P<separator>[,\s]+)"
+)
+SVG_NUMBER_FULL_PATTERN = re.compile(SVG_NUMBER_PATTERN)
+XML_DEFAULT_NAMESPACE_PATTERN = re.compile(br"\sxmlns\s*=\s*(['\"])(.*?)\1")
+XML_DECLARATION_PATTERN = re.compile(
+    br"<\?xml\s+version\s*=\s*(['\"])1\.0\1"
+    br"(?:\s+encoding\s*=\s*(['\"])UTF-8\2)?"
+    br"(?:\s+standalone\s*=\s*(['\"])(?:yes|no)\3)?"
+    br"\s*\?>",
+    re.IGNORECASE,
+)
+SVG_MALFORMED_SEPARATOR_PATTERN = re.compile(r",\s*(?:,|[A-Za-z]|$)|[A-Za-z]\s*,")
+SVG_VIEWBOX_MALFORMED_SEPARATOR_PATTERN = re.compile(r"^\s*,|,\s*,|,\s*$")
+SVG_NAMESPACE = "http://www.w3.org/2000/svg"
+UNSUPPORTED_PATH_ATTRIBUTES = {
+    "clip-path",
+    "clip-rule",
+    "display",
+    "fill",
+    "fill-rule",
+    "filter",
+    "mask",
+    "opacity",
+    "stroke",
+    "stroke-dasharray",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "stroke-miterlimit",
+    "stroke-width",
+    "visibility",
+}
+SVG_ALLOWED_ATTRIBUTES = {
+    "svg": {"viewBox"},
+    "g": set(),
+    "path": {"d"},
+}
+GLYF_COORDINATE_MIN = -32768
+GLYF_COORDINATE_MAX = 32767
 
 
 class PatchError(ValueError):
@@ -57,6 +110,7 @@ def patch_font_branch(
     manifest: Manifest,
     *,
     use_placeholder_glyphs: bool = False,
+    asset_base_dir: Path | None = None,
 ) -> PatchResult:
     if manifest.project != "agent-font-patcher":
         raise PatchError("manifest project must be agent-font-patcher")
@@ -83,6 +137,7 @@ def patch_font_branch(
             font,
             manifest,
             use_placeholder_glyphs=use_placeholder_glyphs,
+            asset_base_dir=asset_base_dir,
         )
         if not patched_codepoints:
             raise PatchError("manifest does not contain any available glyph assets")
@@ -183,21 +238,22 @@ def _add_available_manifest_glyphs(
     manifest: Manifest,
     *,
     use_placeholder_glyphs: bool,
+    asset_base_dir: Path | None,
 ) -> tuple[str, ...]:
     patched: list[str] = []
     for icon in manifest.icons:
         if icon.asset_status != "available":
             continue
-        if not use_placeholder_glyphs:
-            raise PatchError(
-                "glyph asset ingestion is not implemented yet; pass "
-                "--use-placeholder-glyphs for explicit test output"
-        )
         codepoint = codepoint_to_int(icon.codepoint)
         glyph_name = f"agent.{icon.id.replace('-', '_')}"
         if glyph_name in font.getGlyphOrder():
             raise PatchError(f"glyph name already exists: {glyph_name}")
-        _add_placeholder_glyph(font, glyph_name)
+        if use_placeholder_glyphs:
+            _add_placeholder_glyph(font, glyph_name)
+        else:
+            if icon.source is None:
+                raise PatchError(f"icon {icon.id} does not include a source SVG path")
+            _add_svg_glyph(font, glyph_name, _resolve_asset_path(icon.source, asset_base_dir))
         _map_codepoint(font, codepoint, glyph_name)
         patched.append(icon.codepoint)
     return tuple(patched)
@@ -239,6 +295,349 @@ def _add_placeholder_glyph(font: TTFont, glyph_name: str) -> None:
     pen.closePath()
     font["glyf"][glyph_name] = pen.glyph()
     font["hmtx"][glyph_name] = (advance_width, 0)
+
+
+def _resolve_asset_path(source: str, asset_base_dir: Path | None) -> Path:
+    path = Path(source)
+    if path.is_absolute() or asset_base_dir is None:
+        return path
+    return asset_base_dir / path
+
+
+def _add_svg_glyph(font: TTFont, glyph_name: str, svg_path: Path) -> None:
+    svg = _read_svg(svg_path)
+    glyph_order = font.getGlyphOrder()
+    font.setGlyphOrder([*glyph_order, glyph_name])
+
+    units_per_em = int(font["head"].unitsPerEm)
+    advance_width = _default_advance_width(font)
+    scale = min(advance_width / svg.viewbox_width, units_per_em / svg.viewbox_height)
+    offset_x = (advance_width - svg.viewbox_width * scale) / 2
+    offset_y = (units_per_em - svg.viewbox_height * scale) / 2
+    transform = Transform(
+        scale,
+        0,
+        0,
+        -scale,
+        offset_x - svg.viewbox_min_x * scale,
+        units_per_em - offset_y + svg.viewbox_min_y * scale,
+    )
+    pen = TTGlyphPen(None)
+    transformed_pen = TransformPen(pen, transform)
+    for path_data in svg.paths:
+        _validate_svg_path_text(path_data, svg_path)
+        try:
+            parse_path(path_data, transformed_pen)
+        except (AssertionError, AttributeError, IndexError, OverflowError, TypeError, ValueError) as error:
+            raise PatchError(f"unable to parse SVG path data {svg_path}: {error}") from error
+    try:
+        glyph = pen.glyph()
+    except (OverflowError, PenError, ValueError) as error:
+        raise PatchError(f"unable to parse SVG path data {svg_path}: {error}") from error
+    _validate_svg_glyph(glyph, svg_path, font["glyf"], advance_width, units_per_em)
+    font["glyf"][glyph_name] = glyph
+    font["hmtx"][glyph_name] = (advance_width, int(glyph.xMin))
+
+
+@dataclass(frozen=True)
+class SvgPathData:
+    paths: tuple[str, ...]
+    viewbox_min_x: float
+    viewbox_min_y: float
+    viewbox_width: float
+    viewbox_height: float
+
+
+def _read_svg(svg_path: Path) -> SvgPathData:
+    try:
+        svg_data = svg_path.read_bytes()
+        svg_data = _normalize_svg_data(svg_data, svg_path)
+        _reject_unsupported_xml_constructs(svg_data, svg_path)
+        root = SafeElementTree.fromstring(svg_data)
+    except (OSError, DefusedXmlException, SafeElementTree.ParseError) as error:
+        raise PatchError(f"unable to read SVG asset {svg_path}: {error}") from error
+
+    root_namespace, root_tag_name = _split_xml_tag(root.tag)
+    if root_namespace not in (None, SVG_NAMESPACE):
+        raise PatchError(f"SVG asset uses unsupported elements: {svg_path}")
+    if root_tag_name != "svg":
+        raise PatchError(f"SVG asset uses unsupported elements: {svg_path}")
+    viewbox = _read_viewbox(root, svg_path)
+    paths = []
+    for index, element in enumerate(root.iter()):
+        namespace, tag_name = _split_xml_tag(element.tag)
+        if namespace not in (None, SVG_NAMESPACE):
+            raise PatchError(f"SVG asset uses unsupported elements: {svg_path}")
+        if tag_name not in SVG_ALLOWED_ATTRIBUTES:
+            raise PatchError(f"SVG asset uses unsupported elements: {svg_path}")
+        if tag_name == "svg" and index != 0:
+            raise PatchError(f"SVG asset uses unsupported elements: {svg_path}")
+        if (element.text and element.text.strip()) or (element.tail and element.tail.strip()):
+            raise PatchError(f"SVG asset uses unsupported text content: {svg_path}")
+        style = element.attrib.get("style", "")
+        if "transform" in style.lower():
+            raise PatchError(f"SVG asset uses unsupported transforms: {svg_path}")
+        if style:
+            raise PatchError(f"SVG asset uses unsupported style declarations: {svg_path}")
+        if "transform" in element.attrib:
+            raise PatchError(f"SVG asset uses unsupported transforms: {svg_path}")
+        if tag_name == "style":
+            raise PatchError(f"SVG asset uses unsupported style declarations: {svg_path}")
+        if tag_name == "path" and list(element):
+            raise PatchError(f"SVG asset uses unsupported elements: {svg_path}")
+        unsupported_attributes = sorted(set(element.attrib) & UNSUPPORTED_PATH_ATTRIBUTES)
+        if unsupported_attributes:
+            raise PatchError(
+                f"SVG element uses unsupported attributes: {', '.join(unsupported_attributes)}"
+            )
+        unsupported_attributes = sorted(set(element.attrib) - SVG_ALLOWED_ATTRIBUTES[tag_name])
+        if unsupported_attributes:
+            raise PatchError(
+                f"SVG element uses unsupported attributes: {', '.join(unsupported_attributes)}"
+            )
+        if tag_name != "path":
+            continue
+        path_data = element.attrib.get("d")
+        if path_data and path_data.strip():
+            paths.append(path_data)
+    if not paths:
+        raise PatchError(f"SVG asset does not contain path data: {svg_path}")
+    return SvgPathData(
+        paths=tuple(paths),
+        viewbox_min_x=viewbox[0],
+        viewbox_min_y=viewbox[1],
+        viewbox_width=viewbox[2],
+        viewbox_height=viewbox[3],
+    )
+
+
+def _validate_svg_path_text(path_data: str, svg_path: Path) -> None:
+    if SVG_MALFORMED_SEPARATOR_PATTERN.search(path_data):
+        raise PatchError(f"unable to parse SVG path data {svg_path}: malformed separator")
+    tokens = []
+    position = 0
+    while position < len(path_data):
+        match = SVG_PATH_TOKEN_PATTERN.match(path_data, position)
+        if match is None:
+            raise PatchError(f"unable to parse SVG path data {svg_path}: invalid token")
+        if match.lastgroup == "number":
+            coordinate = float(match.group())
+            if not math.isfinite(coordinate):
+                raise PatchError(f"unable to parse SVG path data {svg_path}: non-finite coordinate")
+            if coordinate < GLYF_COORDINATE_MIN or coordinate > GLYF_COORDINATE_MAX:
+                raise PatchError(f"unable to parse SVG path data {svg_path}: out-of-range coordinate")
+        if match.lastgroup in {"command", "number"}:
+            tokens.append(match.group())
+        position = match.end()
+    _validate_svg_path_geometry(tokens, svg_path)
+
+
+def _validate_svg_path_geometry(tokens: list[str], svg_path: Path) -> None:
+    index = 0
+    command = None
+    current = (0.0, 0.0)
+    subpath: list[tuple[float, float]] | None = None
+
+    def is_command(token: str) -> bool:
+        return len(token) == 1 and token in "MmZzLlHhVv"
+
+    def read_number() -> float:
+        nonlocal index
+        if index >= len(tokens) or is_command(tokens[index]):
+            raise PatchError(f"unable to parse SVG path data {svg_path}: missing coordinate")
+        value = float(tokens[index])
+        index += 1
+        return value
+
+    def add_line(point: tuple[float, float]) -> None:
+        nonlocal current
+        if subpath is None:
+            raise PatchError(f"unable to parse SVG path data {svg_path}: missing moveto")
+        subpath.append(point)
+        current = point
+
+    def finish_subpath() -> None:
+        nonlocal subpath
+        if subpath is None:
+            return
+        if not _points_have_area(subpath):
+            raise PatchError(f"SVG asset produced an empty glyph: {svg_path}")
+        subpath = None
+
+    while index < len(tokens):
+        if is_command(tokens[index]):
+            command = tokens[index]
+            index += 1
+        if command is None:
+            raise PatchError(f"unable to parse SVG path data {svg_path}: missing command")
+
+        absolute = command.isupper()
+        normalized_command = command.upper()
+        if normalized_command == "M":
+            finish_subpath()
+            x = read_number()
+            y = read_number()
+            current = (x, y) if absolute else (current[0] + x, current[1] + y)
+            subpath = [current]
+            command = "L" if absolute else "l"
+            while index < len(tokens) and not is_command(tokens[index]):
+                x = read_number()
+                y = read_number()
+                point = (x, y) if absolute else (current[0] + x, current[1] + y)
+                add_line(point)
+        elif normalized_command == "L":
+            while index < len(tokens) and not is_command(tokens[index]):
+                x = read_number()
+                y = read_number()
+                point = (x, y) if absolute else (current[0] + x, current[1] + y)
+                add_line(point)
+        elif normalized_command == "H":
+            while index < len(tokens) and not is_command(tokens[index]):
+                x = read_number()
+                point = (x, current[1]) if absolute else (current[0] + x, current[1])
+                add_line(point)
+        elif normalized_command == "V":
+            while index < len(tokens) and not is_command(tokens[index]):
+                y = read_number()
+                point = (current[0], y) if absolute else (current[0], current[1] + y)
+                add_line(point)
+        elif normalized_command == "Z":
+            finish_subpath()
+            command = None
+        else:
+            raise PatchError(f"unable to parse SVG path data {svg_path}: invalid command")
+    finish_subpath()
+
+
+def _validate_svg_glyph(
+    glyph: object,
+    svg_path: Path,
+    glyf_table: object,
+    advance_width: int,
+    units_per_em: int,
+) -> None:
+    if getattr(glyph, "numberOfContours", 0) <= 0:
+        raise PatchError(f"SVG asset produced an empty glyph: {svg_path}")
+    for coordinate in getattr(glyph, "coordinates", ()):
+        x, y = coordinate
+        if (
+            not math.isfinite(x)
+            or not math.isfinite(y)
+            or x < GLYF_COORDINATE_MIN
+            or x > GLYF_COORDINATE_MAX
+            or y < GLYF_COORDINATE_MIN
+            or y > GLYF_COORDINATE_MAX
+        ):
+            raise PatchError(f"SVG asset produced out-of-range glyph coordinates: {svg_path}")
+    try:
+        glyph.recalcBounds(glyf_table)
+    except (OverflowError, ValueError) as error:
+        raise PatchError(f"unable to parse SVG path data {svg_path}: {error}") from error
+    if (
+        getattr(glyph, "xMin", 0) == getattr(glyph, "xMax", 0)
+        or getattr(glyph, "yMin", 0) == getattr(glyph, "yMax", 0)
+        or not _glyph_contours_have_area(glyph)
+    ):
+        raise PatchError(f"SVG asset produced an empty glyph: {svg_path}")
+    if (
+        getattr(glyph, "xMin", 0) < 0
+        or getattr(glyph, "xMax", 0) > advance_width
+        or getattr(glyph, "yMin", 0) < 0
+        or getattr(glyph, "yMax", 0) > units_per_em
+    ):
+        raise PatchError(f"SVG asset produced out-of-cell glyph bounds: {svg_path}")
+
+
+def _glyph_contours_have_area(glyph: object) -> bool:
+    coordinates = getattr(glyph, "coordinates", ())
+    contour_ends = getattr(glyph, "endPtsOfContours", ())
+    has_contour = False
+    start = 0
+    for end in contour_ends:
+        has_contour = True
+        contour = coordinates[start : end + 1]
+        start = end + 1
+        if len(contour) < 3:
+            return False
+        if not _points_have_area(contour):
+            return False
+    return has_contour
+
+
+def _points_have_area(points: Any) -> bool:
+    if len(points) < 3:
+        return False
+    twice_area = 0.0
+    for index, (x1, y1) in enumerate(points):
+        x2, y2 = points[(index + 1) % len(points)]
+        twice_area += x1 * y2 - x2 * y1
+    return abs(twice_area) > 1e-6
+
+
+def _read_viewbox(root: object, svg_path: Path) -> tuple[float, float, float, float]:
+    viewbox = root.attrib.get("viewBox")
+    if not viewbox:
+        raise PatchError(f"SVG asset does not declare a viewBox: {svg_path}")
+    if SVG_VIEWBOX_MALFORMED_SEPARATOR_PATTERN.search(viewbox):
+        raise PatchError(f"SVG asset has an invalid viewBox: {svg_path}")
+    parts = viewbox.replace(",", " ").split()
+    if len(parts) != 4:
+        raise PatchError(f"SVG asset has an invalid viewBox: {svg_path}")
+    if not all(SVG_NUMBER_FULL_PATTERN.fullmatch(part) for part in parts):
+        raise PatchError(f"SVG asset has an invalid viewBox: {svg_path}")
+    try:
+        min_x, min_y, width, height = (float(part) for part in parts)
+    except ValueError as error:
+        raise PatchError(f"SVG asset has an invalid viewBox: {svg_path}") from error
+    if (
+        not all(math.isfinite(value) for value in (min_x, min_y, width, height))
+        or width <= 0
+        or height <= 0
+        or not _value_within_coordinate_range(min_x)
+        or not _value_within_coordinate_range(min_y)
+        or not _value_within_coordinate_range(min_x + width)
+        or not _value_within_coordinate_range(min_y + height)
+    ):
+        raise PatchError(f"SVG asset has an invalid viewBox: {svg_path}")
+    return min_x, min_y, width, height
+
+
+def _reject_unsupported_xml_constructs(svg_data: bytes, svg_path: Path) -> None:
+    lowered = svg_data.lower()
+    if b"<!" in svg_data or b"&" in svg_data or b"xmlns:" in lowered:
+        raise PatchError(f"SVG asset uses unsupported XML constructs: {svg_path}")
+    for match in XML_DEFAULT_NAMESPACE_PATTERN.finditer(svg_data):
+        if match.group(2).decode("ascii", errors="ignore") != SVG_NAMESPACE:
+            raise PatchError(f"SVG asset uses unsupported XML constructs: {svg_path}")
+    stripped = svg_data.lstrip()
+    if stripped.startswith(b"<?xml"):
+        declaration_end = stripped.find(b"?>")
+        if declaration_end == -1:
+            raise PatchError(f"SVG asset uses unsupported XML constructs: {svg_path}")
+        declaration = stripped[: declaration_end + 2]
+        if not XML_DECLARATION_PATTERN.fullmatch(declaration):
+            raise PatchError(f"SVG asset uses unsupported XML constructs: {svg_path}")
+        stripped = stripped[declaration_end + 2 :]
+    if b"<?" in stripped:
+        raise PatchError(f"SVG asset uses unsupported XML constructs: {svg_path}")
+
+
+def _normalize_svg_data(svg_data: bytes, svg_path: Path) -> bytes:
+    try:
+        return svg_data.decode("utf-8-sig").encode("utf-8")
+    except UnicodeDecodeError as error:
+        raise PatchError(f"SVG asset must be UTF-8 encoded: {svg_path}") from error
+
+
+def _value_within_coordinate_range(value: float) -> bool:
+    return GLYF_COORDINATE_MIN <= value <= GLYF_COORDINATE_MAX
+
+
+def _split_xml_tag(tag: str) -> tuple[str | None, str]:
+    if tag.startswith("{"):
+        namespace, local_name = tag[1:].split("}", 1)
+        return namespace, local_name
+    return None, tag
 
 
 def _default_advance_width(font: TTFont) -> int:

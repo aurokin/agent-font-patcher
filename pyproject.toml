@@ -9,6 +9,7 @@ description = "Patch Nerd Fonts-compatible fonts with modern agent tooling glyph
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "defusedxml>=0.7.1",
   "fonttools>=4.53",
 ]
 

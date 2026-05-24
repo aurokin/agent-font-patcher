@@ -137,7 +137,7 @@ class PatcherTest(unittest.TestCase):
         self.assertIn("patched_range: U+100000-U+1000FF", output)
         self.assertIn("patched_icons: 1", output)
 
-    def test_patch_font_branch_requires_explicit_placeholder_mode(self) -> None:
+    def test_patch_font_branch_reports_missing_svg_asset(self) -> None:
         manifest = _available_icon_manifest()
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -149,7 +149,1234 @@ class PatcherTest(unittest.TestCase):
                 full_name="Example Nerd Font Regular",
             )
 
-            with self.assertRaisesRegex(PatchError, "placeholder"):
+            with self.assertRaisesRegex(PatchError, "unable to read SVG asset"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_ingests_svg_path_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(source_path, root / "out", manifest)
+            codepoints = read_font_codepoints(result.output_path)
+            font = TTFont(result.output_path)
+            glyph = font["glyf"]["agent.test_icon"]
+            advance_width, left_side_bearing = font["hmtx"].metrics["agent.test_icon"]
+            bounds = glyph.xMin, glyph.yMin, glyph.xMax, glyph.yMax
+            font.close()
+
+        self.assertIn(0x100000, codepoints.codepoints)
+        self.assertGreater(glyph.numberOfContours, 0)
+        self.assertEqual(advance_width, 500)
+        self.assertEqual(bounds, (42, 292, 458, 708))
+        self.assertEqual(left_side_bearing, 42)
+
+    def test_patch_font_branch_resolves_svg_assets_relative_to_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_dir = root / "manifest"
+            manifest_dir.mkdir()
+            svg_path = manifest_dir / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source="icon.svg")
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(
+                source_path,
+                root / "out",
+                manifest,
+                asset_base_dir=manifest_dir,
+            )
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_requires_svg_path_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text('<svg viewBox="0 0 1000 1000"></svg>', encoding="utf-8")
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_wraps_malformed_svg_path_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 0"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "SVG path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_unparsed_svg_path_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 0 0 L 10 10 @"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "SVG path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_malformed_svg_path_separators(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 1,,1 L 20 1 L 20 20 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "malformed separator"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_trailing_svg_path_commas(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 1 1 L 20 1 L 20 20 Z,"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "malformed separator"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_fonttools_incompatible_number_tokens(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 1 1 H 1.e2 V 20 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "SVG path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_curve_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 1 1 C 2 2 3 3 4 4"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "SVG path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_dangling_exponent_token(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 0 0 L 10 10 e"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "SVG path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_empty_svg_glyphs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text('<svg viewBox="0 0 24 24"><path d="M 0 0"/></svg>', encoding="utf-8")
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "empty glyph"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_zero_area_svg_glyphs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 0 0 L 10 0 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "empty glyph"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_collinear_zero_area_svg_glyphs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 0 0 L 10 10 L 20 20 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "empty glyph"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_mixed_degenerate_svg_contours(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 1 1 L 20 1 L 20 20 Z M 0 0 L 10 0 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "empty glyph"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_dropped_zero_area_svg_subpaths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 1 1 L 20 1 L 20 20 Z M 0 0 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "empty glyph"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_separator_only_svg_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text('<svg viewBox="0 0 24 24"><path d="   "/></svg>', encoding="utf-8")
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_non_finite_svg_path_coordinates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 1e309 0 L 2 2 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "SVG path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_out_of_range_svg_path_coordinates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 100000 0 L 2 2 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "out-of-range"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_out_of_range_raw_svg_path_coordinates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 32767 32767">'
+                    '<path d="M 40000 0 L 40001 0 L 40001 1 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "out-of-range coordinate"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_out_of_range_svg_viewbox(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 1000000 1000000"><path d="M 1 1 L 2 1 L 2 2 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "invalid viewBox"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_out_of_cell_svg_bounds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 100 0 L 110 0 L 110 10 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "out-of-cell"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_accepts_svg_exponent_numbers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 1e0 1e0 L 2e1 1e0 L 2e1 2e1 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(source_path, root / "out", manifest)
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_accepts_svg_moveto_implicit_line_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M 1 1 20 1 20 20 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(source_path, root / "out", manifest)
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_parses_multiple_svg_paths_independently(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 20 20 l 1 0 l 0 1 z"/>'
+                    '<path d="m 1 1 l 1 0 l 0 1 z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(source_path, root / "out", manifest)
+            font = TTFont(result.output_path)
+            glyph = font["glyf"]["agent.test_icon"]
+            bounds = glyph.xMin, glyph.yMin, glyph.xMax, glyph.yMax
+            font.close()
+
+        self.assertEqual(bounds, (21, 313, 438, 729))
+
+    def test_patch_font_branch_wraps_svg_parser_attribute_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text('<svg viewBox="0 0 24 24"><path d="Z"/></svg>', encoding="utf-8")
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "SVG path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_wraps_svg_pen_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M0 0L1 0L1 1Z L2 2"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "SVG path data"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_non_finite_viewbox_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 NaN 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "invalid viewBox"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_malformed_viewbox_separators(self) -> None:
+        for viewbox in ("0,,0 24 24", ",0 0 24 24", "0 0 24 24,"):
+            with self.subTest(viewbox=viewbox):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    svg_path = root / "icon.svg"
+                    svg_path.write_text(
+                        (
+                            f'<svg viewBox="{viewbox}">'
+                            '<path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                            "</svg>"
+                        ),
+                        encoding="utf-8",
+                    )
+                    manifest = _available_icon_manifest(source=str(svg_path))
+                    source_path = root / "ExampleNerdFont-Regular.ttf"
+                    _write_minimal_font(
+                        source_path,
+                        family="Example Nerd Font",
+                        full_name="Example Nerd Font Regular",
+                    )
+
+                    with self.assertRaisesRegex(PatchError, "invalid viewBox"):
+                        patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_malformed_viewbox_numbers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 1_000 1_000"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "invalid viewBox"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_entities(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<!DOCTYPE svg [<!ENTITY iconPath "M 12 2 L 22 22 L 2 22 Z">]>'
+                    '<svg viewBox="0 0 24 24"><path d="&iconPath;"/></svg>'
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_numeric_svg_entities(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><path d="M &#49; 1 L 2 1 L 2 2 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_xml_stylesheet_processing_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<?xml version="1.0"?>'
+                    '<?xml-stylesheet href="style.css" type="text/css"?>'
+                    '<svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>'
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_leading_xml_stylesheet_processing_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<?xml-stylesheet href="style.css" type="text/css"?>'
+                    '<svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>'
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_non_ascii_processing_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<?é test?><svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_encoded_xml_stylesheet_processing_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_bytes(
+                (
+                    '<?xml version="1.0" encoding="UTF-16"?>'
+                    '<?xml-stylesheet href="style.css" type="text/css"?>'
+                    '<svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>'
+                ).encode("utf-16")
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "UTF-8"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_accepts_xml_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<?xml version="1.0"?><svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(source_path, root / "out", manifest)
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_accepts_xml_declaration_with_utf8_encoding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<?xml version="1.0" encoding="UTF-8" standalone="no"?>'
+                    '<svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>'
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(source_path, root / "out", manifest)
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_rejects_invalid_xml_declarations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<?xml version="2.0"?>'
+                    '<svg viewBox="0 0 24 24"><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>'
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_non_whitespace_svg_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    "ignored"
+                    '<path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported text content"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_non_whitespace_svg_tail_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                    "ignored"
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported text content"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_accepts_svg_namespace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+                    '<path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(source_path, root / "out", manifest)
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_rejects_foreign_svg_namespaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg xmlns="urn:not-svg" viewBox="0 0 24 24">'
+                    '<path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_foreign_namespaced_svg_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg xmlns:foreign="urn:not-svg" viewBox="0 0 24 24">'
+                    '<foreign:path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_unused_foreign_namespace_declarations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg xmlns:foreign="urn:not-svg" viewBox="0 0 24 24">'
+                    '<path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_comments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<svg viewBox="0 0 24 24"><!-- hidden --><path d="M 12 2 L 22 22 L 2 22 Z"/></svg>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_cdata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                    "<![CDATA[ignored]]>"
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported XML constructs"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_transforms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<g transform="translate(12 0)"><path d="M 1 1 L 2 1 L 2 2 Z"/></g>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported transforms"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_style_transforms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path style="transform: translate(12px, 0)" d="M 1 1 L 2 1 L 2 2 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported transforms"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_style_attributes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path style="display:none" d="M 1 1 L 2 1 L 2 2 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported style"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_unsupported_svg_drawing_elements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 1 1 L 2 1 L 2 2 Z"/>'
+                    '<circle cx="12" cy="12" r="3"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported elements"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_unsupported_svg_script_elements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    "<script>alert(1)</script>"
+                    '<path d="M 1 1 L 2 1 L 2 2 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported elements"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_non_svg_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                '<g viewBox="0 0 24 24"><path d="M 1 1 L 2 1 L 2 2 Z"/></g>',
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported elements"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_nested_svg_viewports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<svg viewBox="0 0 240 240">'
+                    '<path d="M 12 2 L 22 22 L 2 22 Z"/>'
+                    "</svg>"
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported elements"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_path_child_elements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 1 1 L 20 1 L 20 20 Z">'
+                    '<path d="M 2 2 L 3 2 L 3 3 Z"/>'
+                    "</path>"
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported elements"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_unsupported_path_presentation_attributes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path fill="none" stroke="black" d="M 1 1 L 2 1 L 2 2 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported attributes"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_inherited_svg_presentation_attributes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<g fill="none" stroke="black">'
+                    '<path d="M 1 1 L 2 1 L 2 2 Z"/>'
+                    "</g>"
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported attributes"):
+                patch_font_branch(source_path, root / "out", manifest)
+
+    def test_patch_font_branch_rejects_svg_defs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<defs><path id="shape" d="M 1 1 L 2 1 L 2 2 Z"/></defs>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "unsupported elements"):
                 patch_font_branch(source_path, root / "out", manifest)
 
     def test_patch_font_branch_rejects_other_manifest_projects(self) -> None:
@@ -749,12 +1976,14 @@ def _available_icon_manifest(
     codepoint: str = "U+100000",
     range_start: str = "U+100000",
     range_end: str = "U+1000FF",
+    source: str = "agent-font-patcher-test",
 ) -> Manifest:
     return parse_manifest(
         _available_icon_manifest_raw(
             codepoint=codepoint,
             range_start=range_start,
             range_end=range_end,
+            source=source,
         )
     )
 
@@ -767,6 +1996,7 @@ def _available_icon_manifest_raw(
     codepoint: str = "U+100000",
     range_start: str = "U+100000",
     range_end: str = "U+1000FF",
+    source: str = "agent-font-patcher-test",
 ) -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -793,7 +2023,7 @@ def _available_icon_manifest_raw(
                 "category": "providers",
                 "codepoint": codepoint,
                 "asset_status": "available",
-                "source": "agent-font-patcher-test",
+                "source": source,
                 "license": "test-fixture",
                 "attribution": "agent-font-patcher",
             }
