@@ -15,7 +15,14 @@ from unittest import mock
 from fontTools.ttLib import TTCollection, TTFont
 from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
 
-from agent_font_patcher.cli import handle_inspect, handle_patch, handle_restore
+from agent_font_patcher.cli import (
+    build_parser,
+    handle_cache_refresh,
+    handle_inspect,
+    handle_patch,
+    handle_restore,
+)
+from agent_font_patcher.font_cache import FontCacheError, FontCacheRefreshResult
 from agent_font_patcher.inspector import inspect_agent_font
 from agent_font_patcher.manifest import Manifest, parse_manifest
 from agent_font_patcher.patcher import (
@@ -103,6 +110,8 @@ class PatcherTest(unittest.TestCase):
                         in_place=False,
                         backup_dir=None,
                         no_backup=False,
+                        refresh_cache=False,
+                        no_refresh_cache=False,
                     )
                 )
 
@@ -509,6 +518,8 @@ class PatcherTest(unittest.TestCase):
                         in_place=True,
                         backup_dir=None,
                         no_backup=False,
+                        refresh_cache=False,
+                        no_refresh_cache=True,
                     )
                 )
 
@@ -516,6 +527,123 @@ class PatcherTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn(f"output: {source_path}", output)
         self.assertIn("backup:", output)
+        self.assertIn("patched_codepoints: 1", output)
+
+    def test_patch_command_refreshes_cache_by_default_for_in_place_mode(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+        cache_result = FontCacheRefreshResult(
+            platform="test",
+            scope="user",
+            commands=(("cache-tool", "refresh"),),
+            restart_hint="restart apps",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            stdout = io.StringIO()
+            with (
+                mock.patch("agent_font_patcher.cli.refresh_font_cache", return_value=cache_result) as refresh,
+                contextlib.redirect_stdout(stdout),
+            ):
+                exit_code = handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=None,
+                        manifest_path=manifest_path,
+                        use_placeholder_glyphs=True,
+                        in_place=True,
+                        backup_dir=None,
+                        no_backup=False,
+                        refresh_cache=False,
+                        no_refresh_cache=False,
+                    )
+                )
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        refresh.assert_called_once_with(font_dirs=(source_path.parent,))
+        self.assertIn("cache_refresh: test user", output)
+        self.assertIn("cache-tool refresh", output)
+
+    def test_patch_command_can_skip_cache_refresh(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            with mock.patch("agent_font_patcher.cli.refresh_font_cache") as refresh:
+                handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=None,
+                        manifest_path=manifest_path,
+                        use_placeholder_glyphs=True,
+                        in_place=True,
+                        backup_dir=None,
+                        no_backup=False,
+                        refresh_cache=False,
+                        no_refresh_cache=True,
+                    )
+                )
+
+        refresh.assert_not_called()
+
+    def test_patch_command_prints_patch_result_before_cache_refresh_failure(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "agent_font_patcher.cli.refresh_font_cache",
+                    side_effect=FontCacheError("cache failed"),
+                ),
+                contextlib.redirect_stdout(stdout),
+                self.assertRaisesRegex(FontCacheError, "cache failed"),
+            ):
+                handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=None,
+                        manifest_path=manifest_path,
+                        use_placeholder_glyphs=True,
+                        in_place=True,
+                        backup_dir=None,
+                        no_backup=False,
+                        refresh_cache=False,
+                        no_refresh_cache=False,
+                    )
+                )
+
+        output = stdout.getvalue()
+        self.assertIn(f"output: {source_path}", output)
         self.assertIn("patched_codepoints: 1", output)
 
     def test_patch_command_requires_output_dir_for_branch_mode(self) -> None:
@@ -542,6 +670,8 @@ class PatcherTest(unittest.TestCase):
                         in_place=False,
                         backup_dir=None,
                         no_backup=False,
+                        refresh_cache=False,
+                        no_refresh_cache=False,
                     )
                 )
 
@@ -560,6 +690,8 @@ class PatcherTest(unittest.TestCase):
                             in_place=False,
                             backup_dir=None,
                             no_backup=False,
+                            refresh_cache=False,
+                            no_refresh_cache=False,
                         )
                     )
 
@@ -589,6 +721,8 @@ class PatcherTest(unittest.TestCase):
                         in_place=True,
                         backup_dir=None,
                         no_backup=False,
+                        refresh_cache=False,
+                        no_refresh_cache=False,
                     )
                 )
 
@@ -616,8 +750,70 @@ class PatcherTest(unittest.TestCase):
                         in_place=True,
                         backup_dir=root / "backups",
                         no_backup=True,
+                        refresh_cache=False,
+                        no_refresh_cache=False,
                     )
                 )
+
+    def test_patch_command_rejects_conflicting_cache_refresh_flags(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            with self.assertRaisesRegex(PatchError, "refresh-cache"):
+                handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=None,
+                        manifest_path=manifest_path,
+                        use_placeholder_glyphs=True,
+                        in_place=True,
+                        backup_dir=None,
+                        no_backup=False,
+                        refresh_cache=True,
+                        no_refresh_cache=True,
+                    )
+                )
+
+    def test_cache_refresh_command_prints_result(self) -> None:
+        cache_result = FontCacheRefreshResult(
+            platform="test",
+            scope="user",
+            commands=(("cache-tool", "refresh"),),
+            restart_hint="restart apps",
+        )
+
+        stdout = io.StringIO()
+        with (
+            mock.patch("agent_font_patcher.cli.refresh_font_cache", return_value=cache_result) as refresh,
+            contextlib.redirect_stdout(stdout),
+        ):
+            exit_code = handle_cache_refresh(
+                SimpleNamespace(system=False, user=True, font_dir=[Path("/fonts")])
+            )
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        refresh.assert_called_once_with(scope="user", font_dirs=(Path("/fonts"),))
+        self.assertIn("cache_refresh: test user", output)
+        self.assertIn("cache-tool refresh", output)
+
+    def test_cache_command_requires_subcommand(self) -> None:
+        parser = build_parser()
+
+        with self.assertRaises(SystemExit) as error:
+            parser.parse_args(["cache"])
+
+        self.assertNotEqual(error.exception.code, 0)
 
     def test_inspect_prints_embedded_patch_range_and_icon_count(self) -> None:
         manifest = _available_icon_manifest()

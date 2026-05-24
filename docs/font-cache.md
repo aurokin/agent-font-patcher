@@ -42,8 +42,8 @@ Implementation notes:
 - Print a clear restart hint for Terminal, iTerm2, Ghostty, WezTerm, Kitty, and
   other running terminal apps.
 
-Open question: whether macOS cache refresh should be automatic for every
-in-place run or gated behind `--refresh-cache` until tested across terminal apps.
+Current implementation refreshes macOS user font caches automatically after a
+successful in-place patch unless `--no-refresh-cache` is passed.
 
 ## Linux
 
@@ -75,6 +75,8 @@ Implementation notes:
 - Support outputting or patching font files first.
 - Provide manual reinstall/restart guidance.
 - Defer service-level cache reset automation until tested on Windows.
+- `cache refresh` reports restart guidance and does not run service-level
+  commands on Windows.
 
 ## CLI Shape
 
@@ -94,4 +96,3 @@ agent-font-patcher patch --in-place --no-refresh-cache <font-path>
 ```
 
 `--system` should never be implied by default.
-

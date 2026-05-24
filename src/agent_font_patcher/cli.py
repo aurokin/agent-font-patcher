@@ -3,6 +3,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from agent_font_patcher.font_cache import (
+    FontCacheError,
+    FontCacheRefreshResult,
+    refresh_font_cache,
+)
 from agent_font_patcher.inspector import FontInspection, inspect_agent_font
 from agent_font_patcher.manifest import Manifest, ManifestError, load_manifest
 from agent_font_patcher.patcher import (
@@ -81,6 +86,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not create a backup before in-place patching.",
     )
     patch_parser.add_argument(
+        "--refresh-cache",
+        action="store_true",
+        help="Refresh font caches after a successful in-place patch. This is the default.",
+    )
+    patch_parser.add_argument(
+        "--no-refresh-cache",
+        action="store_true",
+        help="Do not refresh font caches after a successful in-place patch.",
+    )
+    patch_parser.add_argument(
         "--manifest-path",
         required=True,
         type=Path,
@@ -116,6 +131,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory containing the backup. Defaults to the font directory.",
     )
     restore_parser.set_defaults(handler=handle_restore)
+
+    cache_parser = subparsers.add_parser(
+        "cache",
+        help="Manage platform font caches.",
+    )
+    cache_subparsers = cache_parser.add_subparsers(dest="cache_command")
+    cache_subparsers.required = True
+    cache_refresh_parser = cache_subparsers.add_parser(
+        "refresh",
+        help="Refresh platform font caches.",
+    )
+    cache_refresh_scope = cache_refresh_parser.add_mutually_exclusive_group()
+    cache_refresh_scope.add_argument(
+        "--user",
+        action="store_true",
+        help="Refresh user-level font caches. This is the default.",
+    )
+    cache_refresh_scope.add_argument(
+        "--system",
+        action="store_true",
+        help="Refresh system-level font caches where supported.",
+    )
+    cache_refresh_parser.add_argument(
+        "--font-dir",
+        action="append",
+        type=Path,
+        help="Font directory to scope cache refresh to when supported.",
+    )
+    cache_refresh_parser.set_defaults(handler=handle_cache_refresh)
     return parser
 
 
@@ -127,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     try:
         return args.handler(args)
-    except (ManifestError, PatchError) as error:
+    except (FontCacheError, ManifestError, PatchError) as error:
         parser.error(str(error))
     return 0
 
@@ -180,11 +224,21 @@ def handle_patch(args: argparse.Namespace) -> int:
             raise PatchError("--output-dir cannot be used with --in-place")
         if args.no_backup and args.backup_dir is not None:
             raise PatchError("--backup-dir cannot be used with --no-backup")
+        if args.refresh_cache and args.no_refresh_cache:
+            raise PatchError("--refresh-cache cannot be used with --no-refresh-cache")
     else:
         if args.output_dir is None:
             raise PatchError("--output-dir is required unless --in-place is used")
-        if args.no_backup or args.backup_dir is not None:
-            raise PatchError("--backup-dir and --no-backup require --in-place")
+        if (
+            args.no_backup
+            or args.backup_dir is not None
+            or args.refresh_cache
+            or args.no_refresh_cache
+        ):
+            raise PatchError(
+                "--backup-dir, --no-backup, --refresh-cache, and --no-refresh-cache "
+                "require --in-place"
+            )
 
     manifest = load_manifest(args.manifest_path)
     if args.in_place:
@@ -196,6 +250,10 @@ def handle_patch(args: argparse.Namespace) -> int:
             create_backup=not args.no_backup,
             backup_dir=args.backup_dir,
         )
+        print_patch_result(result)
+        if not args.no_refresh_cache:
+            cache_result = refresh_font_cache(font_dirs=(args.font_path.parent,))
+            print_cache_refresh_result(cache_result)
     else:
         result = patch_font_branch(
             args.font_path,
@@ -204,7 +262,7 @@ def handle_patch(args: argparse.Namespace) -> int:
             use_placeholder_glyphs=args.use_placeholder_glyphs,
             asset_base_dir=args.manifest_path.parent,
         )
-    print_patch_result(result)
+        print_patch_result(result)
     return 0
 
 
@@ -225,6 +283,24 @@ def handle_restore(args: argparse.Namespace) -> int:
     print(f"restored: {args.font_path}")
     print(f"backup: {backup_path}")
     return 0
+
+
+def handle_cache_refresh(args: argparse.Namespace) -> int:
+    scope = "system" if args.system else "user"
+    result = refresh_font_cache(scope=scope, font_dirs=tuple(args.font_dir or ()))
+    print_cache_refresh_result(result)
+    return 0
+
+
+def print_cache_refresh_result(result: FontCacheRefreshResult) -> None:
+    print(f"cache_refresh: {result.platform} {result.scope}")
+    if result.commands:
+        print("cache_commands:")
+        for command in result.commands:
+            print(f"  {' '.join(command)}")
+    else:
+        print("cache_commands: none")
+    print(f"restart_hint: {result.restart_hint}")
 
 
 def handle_inspect(args: argparse.Namespace) -> int:
