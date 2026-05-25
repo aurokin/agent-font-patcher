@@ -32,4 +32,4 @@ pythonpath = ["src"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-agent_font_patcher = ["data/*.json"]
+agent_font_patcher = ["data/*.json", "data/assets/agents/*.svg"]

@@ -11,6 +11,8 @@ import tempfile
 import zlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Any
 
@@ -406,14 +408,23 @@ def _add_placeholder_glyph(font: TTFont, glyph_name: str) -> None:
     font["hmtx"][glyph_name] = (advance_width, 0)
 
 
-def _resolve_asset_path(source: str, asset_base_dir: Path | None) -> Path:
+SvgAssetPath = Path | Traversable
+
+
+def _resolve_asset_path(source: str, asset_base_dir: Path | None) -> SvgAssetPath:
     path = Path(source)
     if path.is_absolute() or asset_base_dir is None:
+        if asset_base_dir is None and not path.is_absolute():
+            packaged_asset = resources.files("agent_font_patcher.data").joinpath(source)
+            if packaged_asset.is_file():
+                return packaged_asset
+            if source.startswith("assets/"):
+                raise PatchError(f"packaged SVG asset not found: {source}")
         return path
     return asset_base_dir / path
 
 
-def _add_svg_glyph(font: TTFont, glyph_name: str, svg_path: Path) -> None:
+def _add_svg_glyph(font: TTFont, glyph_name: str, svg_path: SvgAssetPath) -> None:
     svg = _read_svg(svg_path)
     glyph_order = font.getGlyphOrder()
     font.setGlyphOrder([*glyph_order, glyph_name])
@@ -457,7 +468,7 @@ class SvgPathData:
     viewbox_height: float
 
 
-def _read_svg(svg_path: Path) -> SvgPathData:
+def _read_svg(svg_path: SvgAssetPath) -> SvgPathData:
     try:
         svg_data = svg_path.read_bytes()
         svg_data = _normalize_svg_data(svg_data, svg_path)
@@ -520,7 +531,7 @@ def _read_svg(svg_path: Path) -> SvgPathData:
     )
 
 
-def _validate_svg_path_text(path_data: str, svg_path: Path) -> None:
+def _validate_svg_path_text(path_data: str, svg_path: SvgAssetPath) -> None:
     if SVG_MALFORMED_SEPARATOR_PATTERN.search(path_data):
         raise PatchError(f"unable to parse SVG path data {svg_path}: malformed separator")
     tokens = []
@@ -541,7 +552,7 @@ def _validate_svg_path_text(path_data: str, svg_path: Path) -> None:
     _validate_svg_path_geometry(tokens, svg_path)
 
 
-def _validate_svg_path_geometry(tokens: list[str], svg_path: Path) -> None:
+def _validate_svg_path_geometry(tokens: list[str], svg_path: SvgAssetPath) -> None:
     index = 0
     command = None
     current = (0.0, 0.0)
@@ -620,7 +631,7 @@ def _validate_svg_path_geometry(tokens: list[str], svg_path: Path) -> None:
 
 def _validate_svg_glyph(
     glyph: object,
-    svg_path: Path,
+    svg_path: SvgAssetPath,
     glyf_table: object,
     advance_width: int,
     units_per_em: int,
@@ -683,7 +694,7 @@ def _points_have_area(points: Any) -> bool:
     return abs(twice_area) > 1e-6
 
 
-def _read_viewbox(root: object, svg_path: Path) -> tuple[float, float, float, float]:
+def _read_viewbox(root: object, svg_path: SvgAssetPath) -> tuple[float, float, float, float]:
     viewbox = root.attrib.get("viewBox")
     if not viewbox:
         raise PatchError(f"SVG asset does not declare a viewBox: {svg_path}")
@@ -711,7 +722,7 @@ def _read_viewbox(root: object, svg_path: Path) -> tuple[float, float, float, fl
     return min_x, min_y, width, height
 
 
-def _reject_unsupported_xml_constructs(svg_data: bytes, svg_path: Path) -> None:
+def _reject_unsupported_xml_constructs(svg_data: bytes, svg_path: SvgAssetPath) -> None:
     lowered = svg_data.lower()
     if b"<!" in svg_data or b"&" in svg_data or b"xmlns:" in lowered:
         raise PatchError(f"SVG asset uses unsupported XML constructs: {svg_path}")
@@ -731,7 +742,7 @@ def _reject_unsupported_xml_constructs(svg_data: bytes, svg_path: Path) -> None:
         raise PatchError(f"SVG asset uses unsupported XML constructs: {svg_path}")
 
 
-def _normalize_svg_data(svg_data: bytes, svg_path: Path) -> bytes:
+def _normalize_svg_data(svg_data: bytes, svg_path: SvgAssetPath) -> bytes:
     try:
         return svg_data.decode("utf-8-sig").encode("utf-8")
     except UnicodeDecodeError as error:

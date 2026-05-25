@@ -25,7 +25,7 @@ from agent_font_patcher.cli import (
 )
 from agent_font_patcher.font_cache import FontCacheError, FontCacheRefreshResult
 from agent_font_patcher.inspector import inspect_agent_font
-from agent_font_patcher.manifest import Manifest, parse_manifest
+from agent_font_patcher.manifest import Manifest, codepoint_to_int, load_manifest, parse_manifest
 from agent_font_patcher.patcher import (
     PatchError,
     _best_unicode_cmap,
@@ -122,6 +122,38 @@ class PatcherTest(unittest.TestCase):
         self.assertIn(f"output: {output_dir / 'ExampleNerdFont-Regular-Agent.ttf'}", output)
         self.assertIn("placeholder_glyphs: yes", output)
         self.assertIn("patched_codepoints: 1", output)
+
+    def test_patch_command_uses_packaged_manifest_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            output_dir = root / "out"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = handle_patch(
+                    SimpleNamespace(
+                        font_path=source_path,
+                        output_dir=output_dir,
+                        manifest_path=None,
+                        use_placeholder_glyphs=False,
+                        in_place=False,
+                        backup_dir=None,
+                        no_backup=False,
+                        refresh_cache=False,
+                        no_refresh_cache=False,
+                    )
+                )
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        self.assertIn("patched_codepoints: 20", output)
+        self.assertIn("placeholder_glyphs: no", output)
 
     def test_patch_font_in_place_preserves_names_and_creates_backup(self) -> None:
         manifest = _available_icon_manifest()
@@ -907,6 +939,21 @@ class PatcherTest(unittest.TestCase):
             with self.assertRaisesRegex(PatchError, "unable to read SVG asset"):
                 patch_font_branch(source_path, root / "out", manifest)
 
+    def test_patch_font_branch_reports_missing_packaged_svg_asset(self) -> None:
+        manifest = _available_icon_manifest(source="assets/agents/missing.svg")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "packaged SVG asset not found"):
+                patch_font_branch(source_path, root / "out", manifest)
+
     def test_patch_font_branch_ingests_svg_path_assets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -964,6 +1011,32 @@ class PatcherTest(unittest.TestCase):
             codepoints = read_font_codepoints(result.output_path)
 
         self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_ingests_packaged_available_svg_assets(self) -> None:
+        manifest = load_manifest()
+        available_icons = tuple(icon for icon in manifest.icons if icon.asset_status == "available")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(
+                source_path,
+                root / "out",
+                manifest,
+            )
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertGreaterEqual(len(available_icons), 20)
+        self.assertEqual(set(result.patched_codepoints), {icon.codepoint for icon in available_icons})
+        self.assertEqual(codepoints.error, None)
+        for icon in available_icons:
+            self.assertIn(codepoint_to_int(icon.codepoint), codepoints.codepoints)
 
     def test_patch_font_branch_requires_svg_path_data(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

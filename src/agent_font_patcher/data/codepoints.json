@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "manifest_version": "agent-icons-v2",
+  "manifest_version": "agent-icons-v4",
   "project": "agent-font-patcher",
   "range": {
     "start": "U+100000",
@@ -64,7 +64,10 @@
       "aliases": ["openai-codex"],
       "category": "coding_agents",
       "codepoint": "U+100040",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/codex.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Codex logo via SVGL; product URL https://openai.com/codex/"
     },
     {
       "id": "claude-code",
@@ -72,7 +75,10 @@
       "aliases": ["claude"],
       "category": "coding_agents",
       "codepoint": "U+100041",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/claude-code.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Claude AI logo via SVGL; product URL https://claude.ai/"
     },
     {
       "id": "cursor",
@@ -80,7 +86,10 @@
       "aliases": [],
       "category": "coding_agents",
       "codepoint": "U+100042",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/cursor.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Cursor logo via SVGL; product URL https://www.cursor.com"
     },
     {
       "id": "opencode",
@@ -88,7 +97,10 @@
       "aliases": [],
       "category": "coding_agents",
       "codepoint": "U+100043",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/opencode.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "OpenCode logo via SVGL; product URL https://opencode.ai/"
     },
     {
       "id": "gemini-cli",
@@ -96,7 +108,10 @@
       "aliases": ["google-gemini", "gemini-agent"],
       "category": "coding_agents",
       "codepoint": "U+100044",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/gemini-cli.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Gemini logo via SVGL; product URL https://gemini.google.com/"
     },
     {
       "id": "hermes-agent",
@@ -104,15 +119,21 @@
       "aliases": ["hermes"],
       "category": "coding_agents",
       "codepoint": "U+100045",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/hermes-agent.svg",
+      "license": "Official OSS source; logo rights not granted",
+      "attribution": "Hermes Agent icon from https://github.com/NousResearch/hermes-agent/blob/main/acp_registry/icon.svg; product URL https://hermes-agent.nousresearch.com/"
     },
     {
       "id": "amp",
       "display_name": "Amp",
-      "aliases": ["sourcegraph-amp"],
+      "aliases": ["amp-code"],
       "category": "coding_agents",
       "codepoint": "U+100046",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/amp.svg",
+      "license": "Official source; logo rights not granted",
+      "attribution": "Amp mark from https://ampcode.com/amp-mark-color.svg; product URL https://ampcode.com/"
     },
     {
       "id": "charm",
@@ -128,7 +149,10 @@
       "aliases": ["continue-dev"],
       "category": "coding_agents",
       "codepoint": "U+100048",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/continue.svg",
+      "license": "Apache-2.0 source; logo rights not granted",
+      "attribution": "Continue logo from https://github.com/continuedev/continue/blob/main/docs/logo/dark.svg; product URL https://continue.dev/"
     },
     {
       "id": "github-copilot",
@@ -136,7 +160,10 @@
       "aliases": ["copilot"],
       "category": "coding_agents",
       "codepoint": "U+100049",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/github-copilot.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "GitHub Copilot logo via SVGL; product URL https://github.com/features/copilot"
     },
     {
       "id": "kiro",
@@ -144,7 +171,10 @@
       "aliases": [],
       "category": "coding_agents",
       "codepoint": "U+10004A",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/kiro.svg",
+      "license": "Official source; logo rights not granted",
+      "attribution": "Kiro icon from https://kiro.dev/icon.svg; product URL https://kiro.dev/"
     },
     {
       "id": "rovo-dev",
@@ -152,7 +182,10 @@
       "aliases": ["rovo"],
       "category": "coding_agents",
       "codepoint": "U+10004B",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/rovo-dev.svg",
+      "license": "Official Atlassian logo source; logo rights not granted",
+      "attribution": "Rovo icon from Atlassian app logo download https://atlassian.design/assets/4d1a86746555/logos/rovo_app.zip; product URL https://www.atlassian.com/software/rovo"
     },
     {
       "id": "antigravity",
@@ -160,7 +193,10 @@
       "aliases": ["google-antigravity"],
       "category": "coding_agents",
       "codepoint": "U+10004C",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/antigravity.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Google Antigravity logo via SVGL; product URL https://www.google.com/antigravity"
     },
     {
       "id": "auggie",
@@ -176,7 +212,10 @@
       "aliases": [],
       "category": "coding_agents",
       "codepoint": "U+10004E",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/cline.svg",
+      "license": "Official brand source; logo rights not granted",
+      "attribution": "Cline bot logo from https://cline.bot/assets/branding/brand/General%20Logos/Bot/SVG/BOT_LIGHT.svg; product URL https://cline.bot/"
     },
     {
       "id": "kilocode",
@@ -184,7 +223,10 @@
       "aliases": ["kilo-code"],
       "category": "coding_agents",
       "codepoint": "U+10004F",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/kilocode.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Kilocode logo via SVGL; product URL https://kilocode.ai/"
     },
     {
       "id": "mistral-vibe",
@@ -192,7 +234,10 @@
       "aliases": ["mistral"],
       "category": "coding_agents",
       "codepoint": "U+100050",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/mistral-vibe.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Mistral AI logo via SVGL; product URL https://mistral.ai/"
     },
     {
       "id": "grok",
@@ -200,7 +245,10 @@
       "aliases": ["xai-grok"],
       "category": "coding_agents",
       "codepoint": "U+100051",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/grok.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Grok logo via SVGL; product URL https://grok.com/"
     },
     {
       "id": "pi",
@@ -216,7 +264,10 @@
       "aliases": ["block-goose"],
       "category": "coding_agents",
       "codepoint": "U+100053",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/goose.svg",
+      "license": "Apache-2.0 source; logo rights not granted",
+      "attribution": "Goose glyph from https://github.com/aaif-goose/goose/blob/main/ui/desktop/src/images/glyph.svg; product URL https://goose-docs.ai/"
     },
     {
       "id": "autohand-code",
@@ -248,7 +299,10 @@
       "aliases": ["moonshot-kimi"],
       "category": "coding_agents",
       "codepoint": "U+100057",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/kimi.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Kimi logo via SVGL; product URL https://kimi.ai"
     },
     {
       "id": "qwen-code",
@@ -256,7 +310,10 @@
       "aliases": ["qwen"],
       "category": "coding_agents",
       "codepoint": "U+100058",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/qwen-code.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Qwen logo via SVGL; product URL https://chat.qwenlm.ai/"
     },
     {
       "id": "orca-ade",
@@ -264,7 +321,10 @@
       "aliases": ["orca"],
       "category": "coding_agents",
       "codepoint": "U+100059",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/orca-ade.svg",
+      "license": "Official source; logo rights not granted",
+      "attribution": "Orca ADE logo from https://orcabuild.ai/logo.svg; project https://github.com/stablyai/orca"
     },
     {
       "id": "mcp",

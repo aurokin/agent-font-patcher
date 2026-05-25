@@ -95,8 +95,9 @@ class InspectorTest(unittest.TestCase):
         reserved_icons = sum(
             1 for icon in manifest.icons if icon.asset_status in {"reserved", "deprecated"}
         )
+        available_icons = sum(1 for icon in manifest.icons if icon.asset_status == "available")
         self.assertIn(f"agent_codepoints: 1/{total_icons} present", output)
-        self.assertIn("available_agent_glyphs: 0/0 present", output)
+        self.assertIn(f"available_agent_glyphs: 0/{available_icons} present", output)
         self.assertIn(f"reserved_codepoints: 1/{reserved_icons} occupied", output)
         self.assertIn(f"{first_icon.codepoint} {first_icon.id}", output)
 

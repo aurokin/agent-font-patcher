@@ -102,9 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     patch_parser.add_argument(
         "--manifest-path",
-        required=True,
         type=Path,
-        help="Load a manifest with available glyph assets.",
+        help="Load a manifest with available glyph assets. Defaults to the packaged manifest.",
     )
     patch_parser.add_argument(
         "--use-placeholder-glyphs",
@@ -268,12 +267,13 @@ def handle_patch(args: argparse.Namespace) -> int:
             )
 
     manifest = load_manifest(args.manifest_path)
+    asset_base_dir = args.manifest_path.parent if args.manifest_path is not None else None
     if args.in_place:
         result = patch_font_in_place(
             args.font_path,
             manifest,
             use_placeholder_glyphs=args.use_placeholder_glyphs,
-            asset_base_dir=args.manifest_path.parent,
+            asset_base_dir=asset_base_dir,
             create_backup=not args.no_backup,
             backup_dir=args.backup_dir,
         )
@@ -287,7 +287,7 @@ def handle_patch(args: argparse.Namespace) -> int:
             args.output_dir,
             manifest,
             use_placeholder_glyphs=args.use_placeholder_glyphs,
-            asset_base_dir=args.manifest_path.parent,
+            asset_base_dir=asset_base_dir,
         )
         print_patch_result(result)
     return 0
