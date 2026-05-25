@@ -91,9 +91,13 @@ class InspectorTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertEqual(exit_code, 0)
-        self.assertIn("agent_codepoints: 1/10 present", output)
+        total_icons = len(manifest.icons)
+        reserved_icons = sum(
+            1 for icon in manifest.icons if icon.asset_status in {"reserved", "deprecated"}
+        )
+        self.assertIn(f"agent_codepoints: 1/{total_icons} present", output)
         self.assertIn("available_agent_glyphs: 0/0 present", output)
-        self.assertIn("reserved_codepoints: 1/10 occupied", output)
+        self.assertIn(f"reserved_codepoints: 1/{reserved_icons} occupied", output)
         self.assertIn(f"{first_icon.codepoint} {first_icon.id}", output)
 
     def test_deprecated_manifest_entries_count_as_reserved_occupancy(self) -> None:

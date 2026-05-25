@@ -37,6 +37,11 @@ U+100080-U+1000BF  Protocols, frameworks, and infrastructure
 U+1000C0-U+1000FF  Local runtimes and terminal status glyphs
 ```
 
+The coding-agent block currently reserves entries for Claude Code, Codex, Grok,
+Gemini, Antigravity, Pi, Hermes Agent, OpenCode, Goose, Amp, Auggie, Autohand
+Code, Charm, Cline, Codebuff, Continue, Cursor, Droid, GitHub Copilot, Kilocode,
+Kimi, Kiro, Mistral Vibe, Qwen Code, Rovo Dev, and Orca ADE.
+
 ## Manifest Rules
 
 - Icon IDs are stable lowercase identifiers.
@@ -61,3 +66,5 @@ deprecated  Codepoint remains reserved for compatibility but should not be used
 
 Reserved entries prevent churn while the asset pipeline is still being built.
 They must not be treated as proof that a glyph exists in a patched font.
+
+Asset source and license analysis lives in [asset-sources.md](asset-sources.md).

@@ -10,10 +10,12 @@ class ManifestTest(unittest.TestCase):
         manifest = load_manifest()
 
         self.assertEqual(manifest.project, "agent-font-patcher")
-        self.assertEqual(manifest.manifest_version, "agent-icons-v1")
+        self.assertEqual(manifest.manifest_version, "agent-icons-v2")
         self.assertEqual(manifest.range_start, "U+100000")
         self.assertEqual(manifest.range_end, "U+1000FF")
         self.assertIsNotNone(manifest.icon_by_id("codex"))
+        self.assertIsNotNone(manifest.icon_by_id("orca-ade"))
+        self.assertIsNotNone(manifest.icon_by_id("qwen-code"))
 
     def test_codepoint_to_int_accepts_uppercase_pua_values(self) -> None:
         self.assertEqual(codepoint_to_int("U+100000"), 0x100000)

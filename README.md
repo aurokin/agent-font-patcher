@@ -75,6 +75,8 @@ More detail lives in:
 - Git repository initialized.
 - Product decisions captured in [docs/decisions.md](docs/decisions.md).
 - Font cache strategy captured in [docs/font-cache.md](docs/font-cache.md).
+- Asset source and SVG permission analysis captured in
+  [docs/asset-sources.md](docs/asset-sources.md).
 - Branch-off, in-place patching, backup/restore, cache refresh, and HTML
   specimen generation are implemented in the CLI.
 - The referenced Claude share was loaded through Chrome and summarized in

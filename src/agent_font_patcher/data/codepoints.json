@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "manifest_version": "agent-icons-v1",
+  "manifest_version": "agent-icons-v2",
   "project": "agent-font-patcher",
   "range": {
     "start": "U+100000",
@@ -88,6 +88,182 @@
       "aliases": [],
       "category": "coding_agents",
       "codepoint": "U+100043",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "gemini-cli",
+      "display_name": "Gemini",
+      "aliases": ["google-gemini", "gemini-agent"],
+      "category": "coding_agents",
+      "codepoint": "U+100044",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "hermes-agent",
+      "display_name": "Hermes Agent",
+      "aliases": ["hermes"],
+      "category": "coding_agents",
+      "codepoint": "U+100045",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "amp",
+      "display_name": "Amp",
+      "aliases": ["sourcegraph-amp"],
+      "category": "coding_agents",
+      "codepoint": "U+100046",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "charm",
+      "display_name": "Charm",
+      "aliases": [],
+      "category": "coding_agents",
+      "codepoint": "U+100047",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "continue",
+      "display_name": "Continue",
+      "aliases": ["continue-dev"],
+      "category": "coding_agents",
+      "codepoint": "U+100048",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "github-copilot",
+      "display_name": "GitHub Copilot",
+      "aliases": ["copilot"],
+      "category": "coding_agents",
+      "codepoint": "U+100049",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "kiro",
+      "display_name": "Kiro",
+      "aliases": [],
+      "category": "coding_agents",
+      "codepoint": "U+10004A",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "rovo-dev",
+      "display_name": "Rovo Dev",
+      "aliases": ["rovo"],
+      "category": "coding_agents",
+      "codepoint": "U+10004B",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "antigravity",
+      "display_name": "Antigravity",
+      "aliases": ["google-antigravity"],
+      "category": "coding_agents",
+      "codepoint": "U+10004C",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "auggie",
+      "display_name": "Auggie",
+      "aliases": ["augment-auggie"],
+      "category": "coding_agents",
+      "codepoint": "U+10004D",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "cline",
+      "display_name": "Cline",
+      "aliases": [],
+      "category": "coding_agents",
+      "codepoint": "U+10004E",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "kilocode",
+      "display_name": "Kilocode",
+      "aliases": ["kilo-code"],
+      "category": "coding_agents",
+      "codepoint": "U+10004F",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "mistral-vibe",
+      "display_name": "Mistral Vibe",
+      "aliases": ["mistral"],
+      "category": "coding_agents",
+      "codepoint": "U+100050",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "grok",
+      "display_name": "Grok",
+      "aliases": ["xai-grok"],
+      "category": "coding_agents",
+      "codepoint": "U+100051",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "pi",
+      "display_name": "Pi",
+      "aliases": ["inflection-pi"],
+      "category": "coding_agents",
+      "codepoint": "U+100052",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "goose",
+      "display_name": "Goose",
+      "aliases": ["block-goose"],
+      "category": "coding_agents",
+      "codepoint": "U+100053",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "autohand-code",
+      "display_name": "Autohand Code",
+      "aliases": ["autohand"],
+      "category": "coding_agents",
+      "codepoint": "U+100054",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "codebuff",
+      "display_name": "Codebuff",
+      "aliases": [],
+      "category": "coding_agents",
+      "codepoint": "U+100055",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "droid",
+      "display_name": "Droid",
+      "aliases": [],
+      "category": "coding_agents",
+      "codepoint": "U+100056",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "kimi",
+      "display_name": "Kimi",
+      "aliases": ["moonshot-kimi"],
+      "category": "coding_agents",
+      "codepoint": "U+100057",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "qwen-code",
+      "display_name": "Qwen Code",
+      "aliases": ["qwen"],
+      "category": "coding_agents",
+      "codepoint": "U+100058",
+      "asset_status": "reserved"
+    },
+    {
+      "id": "orca-ade",
+      "display_name": "Orca ADE",
+      "aliases": ["orca"],
+      "category": "coding_agents",
+      "codepoint": "U+100059",
       "asset_status": "reserved"
     },
     {
