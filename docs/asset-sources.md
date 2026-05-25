@@ -1,9 +1,14 @@
 # Asset Sources
 
-This project can reserve glyph codepoints before it has permission to ship a
-logo. Reserved entries must stay `asset_status=reserved` until the SVG is
-license-cleared, normalized, and checked in with source, license, and
-attribution metadata.
+This project can reserve glyph codepoints before it ships a logo. Reserved
+entries stay `asset_status=reserved` until the SVG is source-traced,
+normalized, and checked in with source, license/policy, and attribution
+metadata.
+
+Bundling a third-party logo in this font does not grant trademark, brand, or
+other usage rights to downstream users. Projects using the font are responsible
+for making sure their own use of any logo is allowed. Removal requests should be
+opened as GitHub issues.
 
 ## SVGL
 
@@ -13,20 +18,24 @@ Primary upstream reference:
 - <https://svgl.app/>
 
 SVGL is useful for discovery because it indexes current product logos and
-exposes API/repository metadata. It is not sufficient by itself as redistribution
-permission for a patched font. Use this policy for SVGL-derived candidates:
+exposes API/repository metadata. This project follows the same practical
+posture: include source links and attribution, do not claim logo rights for
+users, and remove disputed assets through GitHub issues.
+
+Use this policy for SVGL-derived candidates:
 
 > Each SVG includes a link to its respective product. Permission must be
 > obtained before using a logo. For removal requests, please open an issue on
 > GitHub.
 
 The SVGL repository also asks contributors to ensure they have the right to use
-an SVG and that its license permits adding it to SVGL. Treat that as a minimum
-bar for discovery, not as clearance for this repository.
+an SVG and that its license permits adding it to SVGL. Treat that as a source
+quality signal, not as a trademark grant to downstream font users.
 
 Before an SVGL-derived glyph becomes `available`:
 
-- confirm the product's own brand/logo terms or upstream license;
+- identify the product's own brand/logo terms or upstream license when
+  available;
 - record the product URL and, when available, brand guideline URL;
 - commit a normalized path-only monochrome SVG that passes the patcher;
 - add manifest `source`, `license`, and `attribution` fields;
@@ -35,7 +44,11 @@ Before an SVGL-derived glyph becomes `available`:
 ## Requested Agent Coverage
 
 These codepoints are reserved in `agent-icons-v2`. Availability means "found in
-SVGL or official upstream during initial analysis", not "redistributable here".
+SVGL or official upstream during initial analysis", not that downstream users
+receive rights to use that logo.
+
+The exact import checklist, in screenshot order, lives in
+[agent-svg-checklist.md](agent-svg-checklist.md).
 
 | ID | Display name | Codepoint | Initial source lead | Status |
 | --- | --- | --- | --- | --- |

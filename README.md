@@ -77,6 +77,8 @@ More detail lives in:
 - Font cache strategy captured in [docs/font-cache.md](docs/font-cache.md).
 - Asset source and SVG permission analysis captured in
   [docs/asset-sources.md](docs/asset-sources.md).
+- Agent SVG acquisition checklist captured in
+  [docs/agent-svg-checklist.md](docs/agent-svg-checklist.md).
 - Branch-off, in-place patching, backup/restore, cache refresh, and HTML
   specimen generation are implemented in the CLI.
 - The referenced Claude share was loaded through Chrome and summarized in

@@ -54,17 +54,19 @@ Kimi, Kiro, Mistral Vibe, Qwen Code, Rovo Dev, and Orca ADE.
 
 ## Asset Status
 
-Manifest entries can reserve codepoints before a redistributable glyph asset is
-available.
+Manifest entries can reserve codepoints before a glyph asset is shipped.
 
 ```text
 reserved    Codepoint is allocated, but no glyph asset is shipped yet.
-available   Glyph asset is shipped and includes source, license, and attribution.
+available   Glyph asset is shipped and includes source, license/policy, and
+            attribution metadata.
 deprecated  Codepoint remains reserved for compatibility but should not be used
             for new output.
 ```
 
 Reserved entries prevent churn while the asset pipeline is still being built.
 They must not be treated as proof that a glyph exists in a patched font.
+Available entries do not grant trademark, brand, or logo usage rights to
+downstream users.
 
 Asset source and license analysis lives in [asset-sources.md](asset-sources.md).
