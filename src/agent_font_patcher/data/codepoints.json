@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "manifest_version": "agent-icons-v4",
+  "manifest_version": "agent-icons-v6",
   "project": "agent-font-patcher",
   "range": {
     "start": "U+100000",
@@ -40,7 +40,10 @@
       "aliases": ["claude"],
       "category": "providers",
       "codepoint": "U+100000",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/anthropic.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Anthropic logo via SVGL; product URL https://www.anthropic.com/"
     },
     {
       "id": "openai",
@@ -48,7 +51,10 @@
       "aliases": ["chatgpt"],
       "category": "providers",
       "codepoint": "U+100001",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/openai.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "OpenAI logo via SVGL; product URL https://openai.com/; brand URL https://openai.com/brand/"
     },
     {
       "id": "gemini",
@@ -56,7 +62,10 @@
       "aliases": ["google-gemini"],
       "category": "providers",
       "codepoint": "U+100002",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/gemini.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Gemini logo via SVGL; product URL https://gemini.google.com/"
     },
     {
       "id": "codex",
@@ -204,7 +213,10 @@
       "aliases": ["augment-auggie"],
       "category": "coding_agents",
       "codepoint": "U+10004D",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/auggie.svg",
+      "license": "Coder registry source; logo rights not granted",
+      "attribution": "Auggie icon from https://registry.coder.com/module/auggie.svg; product URL https://www.augmentcode.com/product/CLI"
     },
     {
       "id": "cline",
@@ -256,7 +268,10 @@
       "aliases": ["inflection-pi"],
       "category": "coding_agents",
       "codepoint": "U+100052",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/pi.svg",
+      "license": "Apache-2.0 source; logo rights not granted",
+      "attribution": "Pi Coding Agent icon from https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/pi-coding-agent.svg; project https://github.com/homarr-labs/dashboard-icons"
     },
     {
       "id": "goose",
@@ -275,7 +290,10 @@
       "aliases": ["autohand"],
       "category": "coding_agents",
       "codepoint": "U+100054",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/autohand-code.svg",
+      "license": "Official source; logo rights not granted",
+      "attribution": "Autohand logo from https://autohand.ai/logos/ours/autohand-logo-light.svg; product URL https://autohand.ai/"
     },
     {
       "id": "codebuff",
@@ -291,7 +309,10 @@
       "aliases": [],
       "category": "coding_agents",
       "codepoint": "U+100056",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/droid.svg",
+      "license": "Apache-2.0 source; logo rights not granted",
+      "attribution": "Factory Droid icon from https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/get-started/registry.mdx; product URL https://factory.ai/product/cli"
     },
     {
       "id": "kimi",
@@ -332,7 +353,10 @@
       "aliases": ["model-context-protocol"],
       "category": "protocols",
       "codepoint": "U+100080",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/mcp.svg",
+      "license": "SVGL source; logo rights not granted",
+      "attribution": "Model Context Protocol logo via SVGL route https://svgl.app/library/model-context-protocol-light.svg; product URL https://modelcontextprotocol.io/"
     },
     {
       "id": "agent-active",

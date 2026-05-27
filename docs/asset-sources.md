@@ -43,9 +43,25 @@ Before an SVGL-derived glyph becomes `available`:
 
 ## Requested Agent Coverage
 
-These codepoints are reserved in `agent-icons-v4`. Availability means "found in
+These codepoints are reserved in `agent-icons-v6`. Availability means "found in
 SVGL or official upstream during initial analysis", not that downstream users
 receive rights to use that logo.
+
+## Provider Coverage
+
+| ID | Display name | Codepoint | Source lead | Status |
+| --- | --- | --- | --- | --- |
+| `anthropic` | Anthropic | `U+100000` | SVGL has Anthropic. | available |
+| `openai` | OpenAI | `U+100001` | SVGL has OpenAI and OpenAI brand URL. | available |
+| `gemini` | Gemini | `U+100002` | SVGL has Gemini. | available |
+
+## Protocol Coverage
+
+| ID | Display name | Codepoint | Source lead | Status |
+| --- | --- | --- | --- | --- |
+| `mcp` | MCP | `U+100080` | SVGL has Model Context Protocol at `model-context-protocol-light.svg`. | available |
+| `agent-active` | Agent Active | `U+1000C0` | Custom status glyph needed. | reserved |
+| `tool-call` | Tool Call | `U+1000C1` | Custom tool-call glyph needed. | reserved |
 
 The exact import checklist, in screenshot order, lives in
 [agent-svg-checklist.md](agent-svg-checklist.md).
@@ -57,19 +73,19 @@ The exact import checklist, in screenshot order, lives in
 | `grok` | Grok | `U+100051` | SVGL has Grok and xAI/Grok. | available |
 | `gemini-cli` | Gemini | `U+100044` | SVGL has Gemini. | available |
 | `antigravity` | Antigravity | `U+10004C` | SVGL has Google Antigravity. | available |
-| `pi` | Pi | `U+100052` | No product-specific SVG found; Inflection AI logo is parent-brand fallback; Raspberry Pi and `pi-mono` are false positives. | reserved |
+| `pi` | Pi | `U+100052` | Homarr dashboard-icons has `pi-coding-agent.svg`. | available |
 | `hermes-agent` | Hermes Agent | `U+100045` | Official OSS repo has `acp_registry/icon.svg`. | available |
 | `opencode` | OpenCode | `U+100043` | SVGL has OpenCode. | available |
 | `goose` | Goose | `U+100053` | Official OSS repo has `ui/desktop/src/images/glyph.svg`. | available |
 | `amp` | Amp | `U+100046` | Product-specific source: `https://ampcode.com/amp-mark-color.svg`; SVGL AMP is a false positive. | available |
-| `auggie` | Auggie | `U+10004D` | Official Augment site exposes brand SVGs; no Auggie-specific OSS SVG found. | reserved |
-| `autohand-code` | Autohand Code | `U+100054` | Deferred: official repo has PNG/favicon assets, but no product SVG. | reserved |
+| `auggie` | Auggie | `U+10004D` | Coder registry module exposes `auggie.svg`. | available |
+| `autohand-code` | Autohand Code | `U+100054` | Official Autohand site exposes light/dark SVG logos. | available |
 | `charm` | Charm | `U+100047` | Deferred: product-specific Crush lead is PNG-only. | reserved |
 | `cline` | Cline | `U+10004E` | Official brand page has bot SVG; OSS repo also has `assets/icons/icon.svg`. | available |
 | `codebuff` | Codebuff | `U+100055` | Deferred: official repo has PNG logo assets, but no SVG. | reserved |
 | `continue` | Continue | `U+100048` | Official OSS repo has `docs/logo/dark.svg`. | available |
 | `cursor` | Cursor | `U+100042` | SVGL has Cursor and a Cursor brand URL. | available |
-| `droid` | Droid | `U+100056` | Needs product-specific source; Factory brand SVG exists, but Droid assets found are PNG/GIF. | reserved |
+| `droid` | Droid | `U+100056` | Agent Client Protocol registry docs include a Factory Droid SVG. | available |
 | `github-copilot` | GitHub Copilot | `U+100049` | SVGL has GitHub Copilot. Octicons/Codicons may also have related glyphs. | available |
 | `kilocode` | Kilocode | `U+10004F` | SVGL has Kilocode. | available |
 | `kimi` | Kimi | `U+100057` | SVGL has Kimi. | available |
@@ -90,6 +106,5 @@ cover the agent-specific brand list above as stable project-level codepoints.
 
 These candidates stay reserved in the active manifest but are deferred for asset import:
 
-- `autohand-code`: official repo has PNG/favicon assets, but no product SVG.
 - `charm`: product-specific Crush lead is PNG-only.
 - `codebuff`: official repo has PNG logo assets, but no SVG.

@@ -19,8 +19,8 @@ from tests.test_scanner import _write_minimal_font
 class InspectorTest(unittest.TestCase):
     def test_inspect_agent_font_reports_manifest_codepoint_coverage(self) -> None:
         manifest = load_manifest()
-        first_icon = manifest.icons[0]
-        codepoint = int(first_icon.codepoint[2:], 16)
+        reserved_icon = next(icon for icon in manifest.icons if icon.asset_status == "reserved")
+        codepoint = int(reserved_icon.codepoint[2:], 16)
 
         with tempfile.TemporaryDirectory() as tmp:
             font_path = Path(tmp) / "ExampleNerdFont-Regular.ttf"
@@ -37,7 +37,7 @@ class InspectorTest(unittest.TestCase):
         self.assertTrue(inspection.candidate.is_likely_nerd_font)
         self.assertEqual(inspection.present_icons, ())
         self.assertEqual(len(inspection.occupied_reserved_codepoints), 1)
-        self.assertEqual(inspection.occupied_reserved_codepoints[0].icon.id, first_icon.id)
+        self.assertEqual(inspection.occupied_reserved_codepoints[0].icon.id, reserved_icon.id)
 
     def test_inspect_agent_font_reports_codepoint_read_errors(self) -> None:
         manifest = load_manifest()
@@ -73,8 +73,8 @@ class InspectorTest(unittest.TestCase):
 
     def test_inspect_output_reports_reserved_hits_separately(self) -> None:
         manifest = load_manifest()
-        first_icon = manifest.icons[0]
-        codepoint = int(first_icon.codepoint[2:], 16)
+        reserved_icon = next(icon for icon in manifest.icons if icon.asset_status == "reserved")
+        codepoint = int(reserved_icon.codepoint[2:], 16)
 
         with tempfile.TemporaryDirectory() as tmp:
             font_path = Path(tmp) / "ExampleNerdFont-Regular.ttf"
@@ -99,7 +99,7 @@ class InspectorTest(unittest.TestCase):
         self.assertIn(f"agent_codepoints: 1/{total_icons} present", output)
         self.assertIn(f"available_agent_glyphs: 0/{available_icons} present", output)
         self.assertIn(f"reserved_codepoints: 1/{reserved_icons} occupied", output)
-        self.assertIn(f"{first_icon.codepoint} {first_icon.id}", output)
+        self.assertIn(f"{reserved_icon.codepoint} {reserved_icon.id}", output)
 
     def test_deprecated_manifest_entries_count_as_reserved_occupancy(self) -> None:
         manifest = _single_icon_manifest(asset_status="deprecated")

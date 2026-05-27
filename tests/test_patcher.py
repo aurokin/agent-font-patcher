@@ -152,7 +152,7 @@ class PatcherTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertEqual(exit_code, 0)
-        self.assertIn("patched_codepoints: 20", output)
+        self.assertIn("patched_codepoints: 28", output)
         self.assertIn("placeholder_glyphs: no", output)
 
     def test_patch_font_in_place_preserves_names_and_creates_backup(self) -> None:
@@ -1032,7 +1032,7 @@ class PatcherTest(unittest.TestCase):
             )
             codepoints = read_font_codepoints(result.output_path)
 
-        self.assertGreaterEqual(len(available_icons), 20)
+        self.assertGreaterEqual(len(available_icons), 28)
         self.assertEqual(set(result.patched_codepoints), {icon.codepoint for icon in available_icons})
         self.assertEqual(codepoints.error, None)
         for icon in available_icons:
