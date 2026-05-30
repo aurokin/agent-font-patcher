@@ -2,84 +2,108 @@
 
 Patch Nerd Fonts-compatible fonts with glyphs for modern agent tooling.
 
-This repository is starting as a design and tooling sandbox. The goal is to
-define a repeatable CLI for taking approved monochrome/vector agent-tool marks,
-assigning them to a private-use Unicode range, patching one or more base fonts,
-and validating that the generated font renders cleanly in terminal UIs.
+`agent-font-patcher` is a small CLI for users and terminal app maintainers who
+need agent/provider/status glyphs in terminal surfaces where SVG rendering is
+not available. GUI apps should still use SVG assets directly when they can.
 
-## Early Scope
+## Status
 
-- Build on Nerd Fonts conventions instead of replacing Nerd Fonts.
-- Target terminal-friendly glyphs: single-color, recognizable at 12-18 px, and
-  aligned to existing Nerd Fonts metrics.
-- Keep icon metadata explicit: source, license, display name, preferred aliases,
-  and assigned codepoint.
-- Start with a small curated set, then expand once the pipeline is stable.
+- Packaged manifest: `agent-icons-v8`
+- Packaged glyphs: 32 available, 0 reserved
+- Codepoint range: `U+100000-U+1000FF` in Supplementary Private Use Area-B
+- Implemented commands: `manifest`, `scan`, `patch`, `inspect`, `restore`,
+  `preview`, and `cache refresh`
 
-## Candidate Agent Tools
+The current release candidate supports branch-off font generation, explicit
+in-place patching with backups, cache refresh, patch metadata inspection, and an
+HTML specimen preview.
 
-The first pass should consider tools and ecosystems commonly shown in developer
-terminals:
+## Install For Development
 
-- Claude / Anthropic
-- OpenAI / ChatGPT / Codex
-- Cursor
-- GitHub Copilot
-- Gemini
-- Aider
-- Continue
-- Sourcegraph Cody
-- Goose
-- Devin
-- MCP
-- LangChain
-- LlamaIndex
-- Ollama
-- LM Studio
+```bash
+uv sync --locked --dev
+uv run agent-font-patcher --help
+```
 
-Final inclusion depends on licensing, icon quality at small sizes, and whether a
-glyph can be made legible without color.
+To install the local checkout as a tool:
 
-## Proposed Pipeline
+```bash
+uv tool install .
+```
 
-1. Collect source SVGs and license metadata.
-2. Normalize each mark into monochrome SVG.
-3. Convert SVG outlines into font glyphs.
-4. Patch target fonts using stable private-use codepoints.
-5. Embed patch metadata for later inspection.
-6. Refresh font caches when in-place patching requires it.
-7. Generate a glyph specimen sheet for visual QA.
-8. Run font validation checks.
+## Common Workflows
 
-## Product Decisions
+List the packaged manifest:
 
-The project is focused on optional user-run font patching. Apps that can render
-SVGs should use SVGs directly, while terminal apps can keep emoji or stock Nerd
-Fonts fallbacks and use this project for accurate opt-in glyphs.
+```bash
+agent-font-patcher manifest
+```
 
-Supported output modes:
+Scan likely installed Nerd Fonts:
 
-- Branch-off font: create a new `Agent Nerd Font` family. This is the default.
-- In-place patch: mutate the selected installed font with backup and cache
-  refresh support.
+```bash
+agent-font-patcher scan
+agent-font-patcher scan --font-dir ~/Library/Fonts
+```
 
-More detail lives in:
+Create a branch-off font without modifying the source file:
 
-- [docs/decisions.md](docs/decisions.md)
-- [docs/codepoints.md](docs/codepoints.md)
-- [docs/font-cache.md](docs/font-cache.md)
-- [docs/brainstorm.md](docs/brainstorm.md)
+```bash
+agent-font-patcher patch "/path/to/JetBrainsMonoNerdFont-Regular.ttf" \
+  --output-dir ./out
+```
 
-## Current Status
+Patch a font in place, with a backup and font cache refresh:
 
-- Git repository initialized.
-- Product decisions captured in [docs/decisions.md](docs/decisions.md).
-- Font cache strategy captured in [docs/font-cache.md](docs/font-cache.md).
-- Asset source and SVG permission analysis captured in
-  [docs/asset-sources.md](docs/asset-sources.md).
-- Agent SVG acquisition checklist captured in
-  [docs/agent-svg-checklist.md](docs/agent-svg-checklist.md).
-- Branch-off, in-place patching, backup/restore, cache refresh, and HTML
-  specimen generation are implemented in the CLI.
-- The referenced Claude share was loaded through Chrome and summarized in
-  [docs/references/claude-share.md](docs/references/claude-share.md).
+```bash
+agent-font-patcher patch --in-place "/path/to/JetBrainsMonoNerdFont-Regular.ttf"
+```
+
+Inspect a patched font:
+
+```bash
+agent-font-patcher inspect ./out/JetBrainsMonoNerdFont-Regular-Agent.ttf
+```
+
+Generate an HTML specimen:
+
+```bash
+agent-font-patcher preview ./out/JetBrainsMonoNerdFont-Regular-Agent.ttf \
+  --output-dir ./out
+```
+
+Restore an in-place backup:
+
+```bash
+agent-font-patcher restore "/path/to/JetBrainsMonoNerdFont-Regular.ttf"
+```
+
+## Release Checks
+
+```bash
+uv run --locked ruff check .
+uv run --locked python -m pytest -q
+uv build
+```
+
+## Documentation
+
+- [Codepoint manifest](docs/codepoints.md)
+- [Product decisions](docs/decisions.md)
+- [Font cache behavior](docs/font-cache.md)
+- [Asset sources](docs/asset-sources.md)
+- [Agent SVG checklist](docs/agent-svg-checklist.md)
+- [Release checklist](docs/release.md)
+
+## Licensing And Trademarks
+
+This repository's original code and documentation are MIT licensed. The
+published package also contains third-party SVG-derived assets under their own
+upstream license and attribution terms, including Apache-2.0 and CC-BY-4.0
+assets. See [NOTICE.md](NOTICE.md) and
+[docs/asset-sources.md](docs/asset-sources.md).
+
+Bundling a logo or product mark in this font does not grant trademark, brand, or
+other usage rights to downstream users. Projects using the font are responsible
+for making sure their own use of any logo is allowed. Removal requests should be
+opened as GitHub issues.

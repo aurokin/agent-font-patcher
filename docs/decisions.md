@@ -65,7 +65,6 @@ Initial commands:
 agent-font-patcher scan
 agent-font-patcher patch <font-path>
 agent-font-patcher patch --in-place <font-path>
-agent-font-patcher patch --all-detected
 agent-font-patcher inspect <font-path>
 agent-font-patcher restore <font-path>
 agent-font-patcher cache refresh
@@ -81,8 +80,8 @@ directories and uses font metadata to identify likely Nerd Fonts. It should
 prefer false negatives over accidentally treating unrelated fonts as patch
 targets.
 
-`patch` should treat single-font and multi-font runs as the same operation over
-a list of targets. For multi-font runs, patch every file first and refresh font
+The first release patches one explicit font path per invocation. Batch patching
+can be added later, but should still patch every file first and refresh font
 caches once at the end.
 
 `inspect` should read embedded metadata and report:
@@ -104,8 +103,8 @@ is still open, but the data model should include:
 {
   "project": "agent-font-patcher",
   "patcher_version": "0.1.0",
-  "manifest_version": "agent-icons-v1",
-  "codepoint_range": "TBD",
+  "manifest_version": "agent-icons-v8",
+  "codepoint_range": "U+100000-U+1000FF",
   "source_font_name": "JetBrainsMono Nerd Font Regular",
   "source_font_hash": "sha256:...",
   "patched_at": "2026-05-23T00:00:00Z"
@@ -130,8 +129,8 @@ The manifest should map stable icon IDs to:
 - source license and attribution;
 - optional upstream-equivalent codepoint when Nerd Fonts later adds the icon.
 
-The PUA block is still undecided. Before assigning concrete values, compare
-against current Nerd Fonts allocations and document the reserved range.
+The first public range is `U+100000-U+1000FF` in Supplementary Private Use
+Area-B. The current packaged manifest is `agent-icons-v8`.
 
 ## Non-Goals
 

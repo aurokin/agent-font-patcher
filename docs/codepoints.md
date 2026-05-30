@@ -37,10 +37,13 @@ U+100080-U+1000BF  Protocols, frameworks, and infrastructure
 U+1000C0-U+1000FF  Local runtimes and terminal status glyphs
 ```
 
-The coding-agent block currently reserves entries for Claude Code, Codex, Grok,
-Gemini, Antigravity, Pi, Hermes Agent, OpenCode, Goose, Amp, Auggie, Autohand
-Code, Charm, Cline, Codebuff, Continue, Cursor, Droid, GitHub Copilot, Kilocode,
+The coding-agent block currently contains Claude Code, Codex, Grok, Gemini,
+Antigravity, Pi, Hermes Agent, OpenCode, Goose, Amp, Auggie, Autohand Code,
+Charm, Cline, Codebuff, Continue, Cursor, Droid, GitHub Copilot, Kilocode,
 Kimi, Kiro, Mistral Vibe, Qwen Code, Rovo Dev, and Orca ADE.
+
+The current packaged manifest is `agent-icons-v8` with 32 available glyphs and
+no reserved entries.
 
 ## Manifest Rules
 

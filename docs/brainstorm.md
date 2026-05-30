@@ -1,4 +1,8 @@
-# Brainstorm: Agent Tool Glyphs for Nerd Fonts
+# Historical Brainstorm: Agent Tool Glyphs for Nerd Fonts
+
+This document is early design context. The implemented release path is captured
+in [decisions.md](decisions.md), [codepoints.md](codepoints.md), and
+[asset-sources.md](asset-sources.md).
 
 ## Product Shape
 

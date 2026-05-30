@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,10 +8,30 @@ version = "0.1.0"
 description = "Patch Nerd Fonts-compatible fonts with modern agent tooling glyphs."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT AND Apache-2.0 AND CC-BY-4.0"
+license-files = ["LICENSE", "NOTICE.md", "LICENSES/*.txt"]
+authors = [
+  {name = "Aurokin"},
+]
 dependencies = [
   "defusedxml>=0.7.1",
   "fonttools>=4.53",
 ]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Text Processing :: Fonts",
+  "Topic :: Utilities",
+]
+
+[project.urls]
+Repository = "https://github.com/aurokin/nerd-font-patcher"
+Issues = "https://github.com/aurokin/nerd-font-patcher/issues"
 
 [dependency-groups]
 dev = [
