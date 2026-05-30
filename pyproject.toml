@@ -30,8 +30,8 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/aurokin/nerd-font-patcher"
-Issues = "https://github.com/aurokin/nerd-font-patcher/issues"
+Repository = "https://github.com/aurokin/agent-font-patcher"
+Issues = "https://github.com/aurokin/agent-font-patcher/issues"
 
 [dependency-groups]
 dev = [
