@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "manifest_version": "agent-icons-v6",
+  "manifest_version": "agent-icons-v8",
   "project": "agent-font-patcher",
   "range": {
     "start": "U+100000",
@@ -150,7 +150,10 @@
       "aliases": [],
       "category": "coding_agents",
       "codepoint": "U+100047",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/charm.svg",
+      "license": "Pictogrammers Material Design Icons source; Apache-2.0 icon",
+      "attribution": "Material Design Icons star-shooting from https://github.com/Templarian/MaterialDesign/blob/master/svg/star-shooting.svg; Nerd Fonts glyph nf-md-star_shooting U+F1741"
     },
     {
       "id": "continue",
@@ -301,7 +304,10 @@
       "aliases": [],
       "category": "coding_agents",
       "codepoint": "U+100055",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/codebuff.svg",
+      "license": "VS Code Codicons source; CC-BY-4.0 icon",
+      "attribution": "VS Code Codicons terminal from https://github.com/microsoft/vscode-codicons/blob/main/src/icons/terminal.svg; Nerd Fonts glyph nf-cod-terminal U+EA85"
     },
     {
       "id": "droid",
@@ -364,7 +370,10 @@
       "aliases": ["agent-running"],
       "category": "runtimes_status",
       "codepoint": "U+1000C0",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/agent-active.svg",
+      "license": "Pictogrammers Material Design Icons source; Apache-2.0 icon",
+      "attribution": "Material Design Icons account-tie from https://github.com/Templarian/MaterialDesign/blob/master/svg/account-tie.svg; Nerd Fonts glyph nf-md-account_tie U+F0CE3"
     },
     {
       "id": "tool-call",
@@ -372,7 +381,10 @@
       "aliases": ["tool-running"],
       "category": "runtimes_status",
       "codepoint": "U+1000C1",
-      "asset_status": "reserved"
+      "asset_status": "available",
+      "source": "assets/agents/tool-call.svg",
+      "license": "Pictogrammers Material Design Icons source; Apache-2.0 icon",
+      "attribution": "Material Design Icons wrench from https://github.com/Templarian/MaterialDesign/blob/master/svg/wrench.svg; Nerd Fonts glyph nf-md-wrench U+F05B7"
     }
   ]
 }

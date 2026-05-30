@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,8 +19,8 @@ from tests.test_scanner import _write_minimal_font
 
 class InspectorTest(unittest.TestCase):
     def test_inspect_agent_font_reports_manifest_codepoint_coverage(self) -> None:
-        manifest = load_manifest()
-        reserved_icon = next(icon for icon in manifest.icons if icon.asset_status == "reserved")
+        manifest = _single_icon_manifest(asset_status="reserved")
+        reserved_icon = manifest.icons[0]
         codepoint = int(reserved_icon.codepoint[2:], 16)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -72,11 +73,13 @@ class InspectorTest(unittest.TestCase):
         self.assertEqual(exit_code, 1)
 
     def test_inspect_output_reports_reserved_hits_separately(self) -> None:
-        manifest = load_manifest()
-        reserved_icon = next(icon for icon in manifest.icons if icon.asset_status == "reserved")
+        manifest = _single_icon_manifest(asset_status="reserved")
+        reserved_icon = manifest.icons[0]
         codepoint = int(reserved_icon.codepoint[2:], 16)
 
         with tempfile.TemporaryDirectory() as tmp:
+            manifest_path = Path(tmp) / "manifest.json"
+            _write_single_icon_manifest(manifest_path, asset_status="reserved")
             font_path = Path(tmp) / "ExampleNerdFont-Regular.ttf"
             _write_minimal_font(
                 font_path,
@@ -87,7 +90,7 @@ class InspectorTest(unittest.TestCase):
 
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
-                exit_code = handle_inspect(SimpleNamespace(manifest_path=None, font_path=font_path))
+                exit_code = handle_inspect(SimpleNamespace(manifest_path=manifest_path, font_path=font_path))
 
         output = stdout.getvalue()
         self.assertEqual(exit_code, 0)
@@ -138,33 +141,39 @@ class InspectorTest(unittest.TestCase):
 
 
 def _single_icon_manifest(asset_status: str) -> Manifest:
-    return parse_manifest(
-        {
-            "schema_version": 1,
-            "manifest_version": "test",
-            "project": "agent-font-patcher",
-            "range": {
+    return parse_manifest(_single_icon_manifest_data(asset_status))
+
+
+def _write_single_icon_manifest(path: Path, asset_status: str) -> None:
+    path.write_text(json.dumps(_single_icon_manifest_data(asset_status)), encoding="utf-8")
+
+
+def _single_icon_manifest_data(asset_status: str) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "manifest_version": "test",
+        "project": "agent-font-patcher",
+        "range": {
+            "start": "U+100000",
+            "end": "U+1000FF",
+            "description": "test",
+        },
+        "blocks": [
+            {
+                "name": "providers",
                 "start": "U+100000",
-                "end": "U+1000FF",
+                "end": "U+10003F",
                 "description": "test",
-            },
-            "blocks": [
-                {
-                    "name": "providers",
-                    "start": "U+100000",
-                    "end": "U+10003F",
-                    "description": "test",
-                }
-            ],
-            "icons": [
-                {
-                    "id": "test-icon",
-                    "display_name": "Test Icon",
-                    "aliases": [],
-                    "category": "providers",
-                    "codepoint": "U+100000",
-                    "asset_status": asset_status,
-                }
-            ],
-        }
-    )
+            }
+        ],
+        "icons": [
+            {
+                "id": "test-icon",
+                "display_name": "Test Icon",
+                "aliases": [],
+                "category": "providers",
+                "codepoint": "U+100000",
+                "asset_status": asset_status,
+            }
+        ],
+    }

@@ -43,9 +43,9 @@ Before an SVGL-derived glyph becomes `available`:
 
 ## Requested Agent Coverage
 
-These codepoints are reserved in `agent-icons-v6`. Availability means "found in
-SVGL or official upstream during initial analysis", not that downstream users
-receive rights to use that logo.
+These codepoints are allocated in `agent-icons-v8`. Availability means "found
+in SVGL, Nerd Fonts, or official upstream during analysis", not that downstream
+users receive rights to use that logo.
 
 ## Provider Coverage
 
@@ -60,8 +60,8 @@ receive rights to use that logo.
 | ID | Display name | Codepoint | Source lead | Status |
 | --- | --- | --- | --- | --- |
 | `mcp` | MCP | `U+100080` | SVGL has Model Context Protocol at `model-context-protocol-light.svg`. | available |
-| `agent-active` | Agent Active | `U+1000C0` | Custom status glyph needed. | reserved |
-| `tool-call` | Tool Call | `U+1000C1` | Custom tool-call glyph needed. | reserved |
+| `agent-active` | Agent Active | `U+1000C0` | Nerd Fonts `󰳣` maps to Material Design Icons `account-tie` (`nf-md-account_tie`, `U+F0CE3`). | available |
+| `tool-call` | Tool Call | `U+1000C1` | Nerd Fonts `󰖷` maps to Material Design Icons `wrench` (`nf-md-wrench`, `U+F05B7`). | available |
 
 The exact import checklist, in screenshot order, lives in
 [agent-svg-checklist.md](agent-svg-checklist.md).
@@ -80,9 +80,9 @@ The exact import checklist, in screenshot order, lives in
 | `amp` | Amp | `U+100046` | Product-specific source: `https://ampcode.com/amp-mark-color.svg`; SVGL AMP is a false positive. | available |
 | `auggie` | Auggie | `U+10004D` | Coder registry module exposes `auggie.svg`. | available |
 | `autohand-code` | Autohand Code | `U+100054` | Official Autohand site exposes light/dark SVG logos. | available |
-| `charm` | Charm | `U+100047` | Deferred: product-specific Crush lead is PNG-only. | reserved |
+| `charm` | Charm | `U+100047` | Nerd Fonts `󱝁` maps to Material Design Icons `star-shooting` (`nf-md-star_shooting`, `U+F1741`). | available |
 | `cline` | Cline | `U+10004E` | Official brand page has bot SVG; OSS repo also has `assets/icons/icon.svg`. | available |
-| `codebuff` | Codebuff | `U+100055` | Deferred: official repo has PNG logo assets, but no SVG. | reserved |
+| `codebuff` | Codebuff | `U+100055` | Nerd Fonts `` maps to VS Code Codicons `terminal` (`nf-cod-terminal`, `U+EA85`). | available |
 | `continue` | Continue | `U+100048` | Official OSS repo has `docs/logo/dark.svg`. | available |
 | `cursor` | Cursor | `U+100042` | SVGL has Cursor and a Cursor brand URL. | available |
 | `droid` | Droid | `U+100056` | Agent Client Protocol registry docs include a Factory Droid SVG. | available |
@@ -104,7 +104,4 @@ cover the agent-specific brand list above as stable project-level codepoints.
 
 ## Deferred Candidates
 
-These candidates stay reserved in the active manifest but are deferred for asset import:
-
-- `charm`: product-specific Crush lead is PNG-only.
-- `codebuff`: official repo has PNG logo assets, but no SVG.
+No requested agent entries are deferred in `agent-icons-v8`.

@@ -29,9 +29,9 @@ this list in sync with `src/agent_font_patcher/data/codepoints.json`.
 | 10 | Amp | `amp` | `U+100046` | Product-specific source: `https://ampcode.com/amp-mark-color.svg`; SVGL AMP is a false positive. | available: `src/agent_font_patcher/data/assets/agents/amp.svg` |
 | 11 | Auggie | `auggie` | `U+10004D` | Coder registry module exposes `auggie.svg`. | available: `src/agent_font_patcher/data/assets/agents/auggie.svg` |
 | 12 | Autohand Code | `autohand-code` | `U+100054` | Official Autohand site exposes light/dark SVG logos. | available: `src/agent_font_patcher/data/assets/agents/autohand-code.svg` |
-| 13 | Charm | `charm` | `U+100047` | Deferred: product-specific Crush lead is PNG-only. | missing |
+| 13 | Charm | `charm` | `U+100047` | Nerd Fonts `󱝁` maps to Material Design Icons `star-shooting` (`nf-md-star_shooting`, `U+F1741`). | available: `src/agent_font_patcher/data/assets/agents/charm.svg` |
 | 14 | Cline | `cline` | `U+10004E` | Official brand page has bot SVG; OSS repo also has `assets/icons/icon.svg`. | available: `src/agent_font_patcher/data/assets/agents/cline.svg` |
-| 15 | Codebuff | `codebuff` | `U+100055` | Deferred: official repo has PNG logo assets, but no SVG. | missing |
+| 15 | Codebuff | `codebuff` | `U+100055` | Nerd Fonts `` maps to VS Code Codicons `terminal` (`nf-cod-terminal`, `U+EA85`). | available: `src/agent_font_patcher/data/assets/agents/codebuff.svg` |
 | 16 | Continue | `continue` | `U+100048` | Official OSS repo has `docs/logo/dark.svg`. | available: `src/agent_font_patcher/data/assets/agents/continue.svg` |
 | 17 | Cursor | `cursor` | `U+100042` | SVGL has Cursor and a Cursor brand URL. | available: `src/agent_font_patcher/data/assets/agents/cursor.svg` |
 | 18 | Droid | `droid` | `U+100056` | Agent Client Protocol registry docs include a Factory Droid SVG. | available: `src/agent_font_patcher/data/assets/agents/droid.svg` |
@@ -55,6 +55,7 @@ These entries now have normalized SVG assets:
 - `codex`
 - `opencode`
 - `cursor`
+- `charm`
 - `kilocode`
 - `kimi`
 - `qwen-code`
@@ -70,16 +71,23 @@ These entries now have normalized SVG assets:
 - `hermes-agent`
 - `goose`
 - `autohand-code`
+- `codebuff`
 - `amp`
 - `cline`
 - `continue`
 - `droid`
 - `kiro`
 - `rovo-dev`
+- `agent-active`
+- `tool-call`
+
+## Status Assets
+
+| Status | Manifest ID | Codepoint | Source lead | Asset |
+| --- | --- | --- | --- | --- |
+| Agent Active | `agent-active` | `U+1000C0` | Nerd Fonts `󰳣` maps to Material Design Icons `account-tie` (`nf-md-account_tie`, `U+F0CE3`). | available: `src/agent_font_patcher/data/assets/agents/agent-active.svg` |
+| Tool Call | `tool-call` | `U+1000C1` | Nerd Fonts `󰖷` maps to Material Design Icons `wrench` (`nf-md-wrench`, `U+F05B7`). | available: `src/agent_font_patcher/data/assets/agents/tool-call.svg` |
 
 ## Deferred Candidates
 
-These stay reserved in the active manifest but are deferred for asset import:
-
-- `charm`: product-specific Crush lead is PNG-only.
-- `codebuff`: official repo has PNG logo assets, but no SVG.
+No requested agent entries are deferred in `agent-icons-v8`.
