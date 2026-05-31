@@ -78,6 +78,10 @@ Print the agent glyphs in the current terminal:
 agent-font-patcher preview --terminal ./out/JetBrainsMonoNerdFont-Regular-Agent.ttf
 ```
 
+Example terminal preview:
+
+![Terminal preview showing patched agent glyphs](docs/images/terminal-preview.png)
+
 Restore an in-place backup:
 
 ```bash
