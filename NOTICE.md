@@ -28,7 +28,7 @@ trademark, brand, or other usage rights to downstream users.
 | `cursor` | Cursor | `U+100042` | SVGL source; logo rights not granted | Cursor logo via SVGL; product URL https://www.cursor.com |
 | `opencode` | OpenCode | `U+100043` | SVGL source; logo rights not granted | OpenCode logo via SVGL; product URL https://opencode.ai/ |
 | `gemini-cli` | Gemini | `U+100044` | SVGL source; logo rights not granted | Gemini logo via SVGL; product URL https://gemini.google.com/ |
-| `hermes-agent` | Hermes Agent | `U+100045` | Official OSS source; logo rights not granted | Hermes Agent icon from https://github.com/NousResearch/hermes-agent/blob/main/acp_registry/icon.svg; product URL https://hermes-agent.nousresearch.com/ |
+| `hermes-agent` | Hermes Agent | `U+100045` | Agent Scan bundled provider asset; logo rights not granted | Hermes/NousResearch provider logo from Agent Scan desktop bundled asset https://github.com/aurokin/agentscan/tree/main/desktop/src/assets/providers; product URL https://hermes-agent.nousresearch.com/ |
 | `amp` | Amp | `U+100046` | Official source; logo rights not granted | Amp mark from https://ampcode.com/amp-mark-color.svg; product URL https://ampcode.com/ |
 | `charm` | Charm | `U+100047` | Pictogrammers Material Design Icons source; Apache-2.0 icon | Material Design Icons star-shooting from https://github.com/Templarian/MaterialDesign/blob/master/svg/star-shooting.svg; Nerd Fonts glyph nf-md-star_shooting U+F1741 |
 | `continue` | Continue | `U+100048` | Apache-2.0 source; logo rights not granted | Continue logo from https://github.com/continuedev/continue/blob/main/docs/logo/dark.svg; product URL https://continue.dev/ |

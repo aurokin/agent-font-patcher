@@ -15,8 +15,8 @@ not available. GUI apps should still use SVG assets directly when they can.
   `preview`, and `cache refresh`
 
 The current release candidate supports branch-off font generation, explicit
-in-place patching with backups, cache refresh, patch metadata inspection, and an
-HTML specimen preview.
+in-place patching with backups, cache refresh, patch metadata inspection, and
+HTML or terminal specimen previews.
 
 ## Install For Development
 
@@ -70,6 +70,12 @@ Generate an HTML specimen:
 ```bash
 agent-font-patcher preview ./out/JetBrainsMonoNerdFont-Regular-Agent.ttf \
   --output-dir ./out
+```
+
+Print the agent glyphs in the current terminal:
+
+```bash
+agent-font-patcher preview --terminal ./out/JetBrainsMonoNerdFont-Regular-Agent.ttf
 ```
 
 Restore an in-place backup:

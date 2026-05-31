@@ -882,6 +882,91 @@ class PatcherTest(unittest.TestCase):
         self.assertIn("agent_glyphs: 1/1 present", output)
         self.assertIn("Test Icon", html)
 
+    def test_preview_command_prints_terminal_specimen(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            font_path = root / "ExampleNerdFont-Regular.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                font_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+                extra_codepoints={0x100000: "agent.test_icon"},
+            )
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = handle_preview(
+                    SimpleNamespace(
+                        font_path=font_path,
+                        manifest_path=manifest_path,
+                        output=None,
+                        output_dir=None,
+                        terminal=True,
+                    )
+                )
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        self.assertIn(f"font: {font_path}", output)
+        self.assertIn("agent_glyphs: 1/1 present", output)
+        self.assertIn("symbols:", output)
+        self.assertIn("U+100000", output)
+        self.assertIn(chr(0x100000), output)
+        self.assertIn("test-icon  Test Icon  present", output)
+
+    def test_preview_terminal_reports_metadata_read_failure(self) -> None:
+        manifest_path_content = _available_icon_manifest_json()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            font_path = root / "NoName.ttf"
+            manifest_path = root / "manifest.json"
+            _write_minimal_font(
+                font_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+                extra_codepoints={0x100000: "agent.test_icon"},
+            )
+            font = TTFont(font_path)
+            del font["name"]
+            font.save(font_path)
+            font.close()
+            manifest_path.write_text(manifest_path_content, encoding="utf-8")
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = handle_preview(
+                    SimpleNamespace(
+                        font_path=font_path,
+                        manifest_path=manifest_path,
+                        output=None,
+                        output_dir=None,
+                        terminal=True,
+                    )
+                )
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 1)
+        self.assertIn("font_metadata: unreadable", output)
+        self.assertIn("agent_glyphs: 1/1 present", output)
+        self.assertIn("test-icon  Test Icon  present", output)
+
+    def test_preview_command_rejects_terminal_with_html_output(self) -> None:
+        with self.assertRaisesRegex(ValueError, "terminal"):
+            handle_preview(
+                SimpleNamespace(
+                    font_path=Path("Example.ttf"),
+                    manifest_path=None,
+                    output=Path("preview.html"),
+                    output_dir=None,
+                    terminal=True,
+                )
+            )
+
     def test_preview_command_rejects_output_and_output_dir(self) -> None:
         with self.assertRaisesRegex(ValueError, "output"):
             handle_preview(
@@ -981,8 +1066,8 @@ class PatcherTest(unittest.TestCase):
         self.assertIn(0x100000, codepoints.codepoints)
         self.assertGreater(glyph.numberOfContours, 0)
         self.assertEqual(advance_width, 500)
-        self.assertEqual(bounds, (42, 292, 458, 708))
-        self.assertEqual(left_side_bearing, 42)
+        self.assertEqual(bounds, (-100, -50, 600, 650))
+        self.assertEqual(left_side_bearing, -100)
 
     def test_patch_font_branch_resolves_svg_assets_relative_to_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1149,12 +1234,17 @@ class PatcherTest(unittest.TestCase):
             with self.assertRaisesRegex(PatchError, "SVG path data"):
                 patch_font_branch(source_path, root / "out", manifest)
 
-    def test_patch_font_branch_rejects_svg_curve_commands(self) -> None:
+    def test_patch_font_branch_accepts_svg_curve_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             svg_path = root / "icon.svg"
             svg_path.write_text(
-                '<svg viewBox="0 0 24 24"><path d="M 1 1 C 2 2 3 3 4 4"/></svg>',
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 12 2 C 18 2 22 6 22 12 C 22 18 18 22 12 22 '
+                    'C 6 22 2 18 2 12 C 2 6 6 2 12 2 Z"/>'
+                    "</svg>"
+                ),
                 encoding="utf-8",
             )
             manifest = _available_icon_manifest(source=str(svg_path))
@@ -1165,7 +1255,58 @@ class PatcherTest(unittest.TestCase):
                 full_name="Example Nerd Font Regular",
             )
 
-            with self.assertRaisesRegex(PatchError, "SVG path data"):
+            result = patch_font_branch(source_path, root / "out", manifest)
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_accepts_svg_arc_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 12 2 A 10 10 0 1 1 11.999 2 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            result = patch_font_branch(source_path, root / "out", manifest)
+            codepoints = read_font_codepoints(result.output_path)
+
+        self.assertIn(0x100000, codepoints.codepoints)
+
+    def test_patch_font_branch_rejects_degenerate_subpaths_with_curve_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            svg_path = root / "icon.svg"
+            svg_path.write_text(
+                (
+                    '<svg viewBox="0 0 24 24">'
+                    '<path d="M 12 2 C 18 2 22 6 22 12 C 22 18 18 22 12 22 '
+                    'C 6 22 2 18 2 12 C 2 6 6 2 12 2 Z M 0 0 L 10 0 Z"/>'
+                    "</svg>"
+                ),
+                encoding="utf-8",
+            )
+            manifest = _available_icon_manifest(source=str(svg_path))
+            source_path = root / "ExampleNerdFont-Regular.ttf"
+            _write_minimal_font(
+                source_path,
+                family="Example Nerd Font",
+                full_name="Example Nerd Font Regular",
+            )
+
+            with self.assertRaisesRegex(PatchError, "empty glyph"):
                 patch_font_branch(source_path, root / "out", manifest)
 
     def test_patch_font_branch_rejects_svg_dangling_exponent_token(self) -> None:
@@ -1471,7 +1612,7 @@ class PatcherTest(unittest.TestCase):
             bounds = glyph.xMin, glyph.yMin, glyph.xMax, glyph.yMax
             font.close()
 
-        self.assertEqual(bounds, (21, 313, 438, 729))
+        self.assertEqual(bounds, (-100, -50, 600, 650))
 
     def test_patch_font_branch_wraps_svg_parser_attribute_errors(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

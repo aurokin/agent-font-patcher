@@ -52,8 +52,10 @@ SVG_NUMBER_PATTERN = (
     r"[+-]?(?:(?:(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)|"
     r"(?:\.[0-9]+(?:[eE][+-]?[0-9]+)?))"
 )
+SVG_PATH_COMMANDS = "MmZzLlHhVvCcSsQqTtAa"
+SVG_LINE_PATH_COMMANDS = frozenset("MmZzLlHhVv")
 SVG_PATH_TOKEN_PATTERN = re.compile(
-    r"(?P<command>[MmZzLlHhVv])|"
+    rf"(?P<command>[{SVG_PATH_COMMANDS}])|"
     rf"(?P<number>{SVG_NUMBER_PATTERN})|"
     r"(?P<separator>[,\s]+)"
 )
@@ -93,6 +95,9 @@ SVG_ALLOWED_ATTRIBUTES = {
 }
 GLYF_COORDINATE_MIN = -32768
 GLYF_COORDINATE_MAX = 32767
+SVG_GLYPH_TARGET_EM_FRACTION = 0.84
+SVG_GLYPH_MAX_ADVANCE_RATIO = 1.4
+SVG_GLYPH_OVERHANG_TOLERANCE_ADVANCE_FRACTION = 0.05
 
 
 class PatchError(ValueError):
@@ -431,17 +436,72 @@ def _add_svg_glyph(font: TTFont, glyph_name: str, svg_path: SvgAssetPath) -> Non
 
     units_per_em = int(font["head"].unitsPerEm)
     advance_width = _default_advance_width(font)
-    scale = min(advance_width / svg.viewbox_width, units_per_em / svg.viewbox_height)
-    offset_x = (advance_width - svg.viewbox_width * scale) / 2
-    offset_y = (units_per_em - svg.viewbox_height * scale) / 2
+    vertical_min, vertical_max = _glyph_vertical_bounds(font, units_per_em)
+    vertical_height = vertical_max - vertical_min
+    raw_transform = Transform(1, 0, 0, -1, -svg.viewbox_min_x, svg.viewbox_height + svg.viewbox_min_y)
+    raw_glyph = _parse_svg_glyph(svg, svg_path, raw_transform)
+    _validate_svg_glyph(
+        raw_glyph,
+        svg_path,
+        font["glyf"],
+        min_x=-1,
+        max_x=svg.viewbox_width + 1,
+        min_y=-1,
+        max_y=svg.viewbox_height + 1,
+    )
+
+    raw_width = raw_glyph.xMax - raw_glyph.xMin
+    raw_height = raw_glyph.yMax - raw_glyph.yMin
+    target_width = min(
+        units_per_em * SVG_GLYPH_TARGET_EM_FRACTION,
+        advance_width * SVG_GLYPH_MAX_ADVANCE_RATIO,
+    )
+    target_height = vertical_height * SVG_GLYPH_TARGET_EM_FRACTION
+    scale = min(target_width / raw_width, target_height / raw_height)
+    offset_x = (advance_width - raw_width * scale) / 2 - raw_glyph.xMin * scale
+    offset_y = vertical_min + (vertical_height - raw_height * scale) / 2 - raw_glyph.yMin * scale
     transform = Transform(
         scale,
         0,
         0,
         -scale,
         offset_x - svg.viewbox_min_x * scale,
-        units_per_em - offset_y + svg.viewbox_min_y * scale,
+        offset_y + (svg.viewbox_height + svg.viewbox_min_y) * scale,
     )
+    glyph = _parse_svg_glyph(svg, svg_path, transform)
+    max_horizontal_overhang = max(
+        math.ceil(
+            (target_width - advance_width) / 2
+            + advance_width * SVG_GLYPH_OVERHANG_TOLERANCE_ADVANCE_FRACTION
+        ),
+        0,
+    )
+    _validate_svg_glyph(
+        glyph,
+        svg_path,
+        font["glyf"],
+        min_x=-max_horizontal_overhang,
+        max_x=advance_width + max_horizontal_overhang,
+        min_y=vertical_min,
+        max_y=vertical_max,
+    )
+    font["glyf"][glyph_name] = glyph
+    font["hmtx"][glyph_name] = (advance_width, int(glyph.xMin))
+
+
+def _glyph_vertical_bounds(font: TTFont, units_per_em: int) -> tuple[int, int]:
+    ascent = int(getattr(font["hhea"], "ascent", units_per_em))
+    descent = int(getattr(font["hhea"], "descent", 0))
+    if ascent <= 0:
+        return 0, units_per_em
+    min_y = max(descent, -units_per_em) if descent < 0 else 0
+    max_y = min(ascent, units_per_em)
+    if max_y <= min_y:
+        return 0, units_per_em
+    return min_y, max_y
+
+
+def _parse_svg_glyph(svg: SvgPathData, svg_path: SvgAssetPath, transform: Transform) -> object:
     pen = TTGlyphPen(None)
     transformed_pen = TransformPen(pen, transform)
     for path_data in svg.paths:
@@ -454,9 +514,7 @@ def _add_svg_glyph(font: TTFont, glyph_name: str, svg_path: SvgAssetPath) -> Non
         glyph = pen.glyph()
     except (OverflowError, PenError, ValueError) as error:
         raise PatchError(f"unable to parse SVG path data {svg_path}: {error}") from error
-    _validate_svg_glyph(glyph, svg_path, font["glyf"], advance_width, units_per_em)
-    font["glyf"][glyph_name] = glyph
-    font["hmtx"][glyph_name] = (advance_width, int(glyph.xMin))
+    return glyph
 
 
 @dataclass(frozen=True)
@@ -549,92 +607,70 @@ def _validate_svg_path_text(path_data: str, svg_path: SvgAssetPath) -> None:
         if match.lastgroup in {"command", "number"}:
             tokens.append(match.group())
         position = match.end()
-    _validate_svg_path_geometry(tokens, svg_path)
+    _validate_svg_path_geometry(path_data, svg_path)
 
 
-def _validate_svg_path_geometry(tokens: list[str], svg_path: SvgAssetPath) -> None:
-    index = 0
-    command = None
-    current = (0.0, 0.0)
-    subpath: list[tuple[float, float]] | None = None
+def _validate_svg_path_geometry(path_data: str, svg_path: SvgAssetPath) -> None:
+    pen = _SvgGeometryPen(svg_path)
+    try:
+        parse_path(path_data, pen)
+        pen.finish()
+    except PatchError:
+        raise
+    except (AssertionError, AttributeError, IndexError, OverflowError, TypeError, ValueError) as error:
+        raise PatchError(f"unable to parse SVG path data {svg_path}: {error}") from error
 
-    def is_command(token: str) -> bool:
-        return len(token) == 1 and token in "MmZzLlHhVv"
 
-    def read_number() -> float:
-        nonlocal index
-        if index >= len(tokens) or is_command(tokens[index]):
-            raise PatchError(f"unable to parse SVG path data {svg_path}: missing coordinate")
-        value = float(tokens[index])
-        index += 1
-        return value
+class _SvgGeometryPen:
+    def __init__(self, svg_path: SvgAssetPath) -> None:
+        self.svg_path = svg_path
+        self.subpath: list[tuple[float, float]] | None = None
 
-    def add_line(point: tuple[float, float]) -> None:
-        nonlocal current
-        if subpath is None:
-            raise PatchError(f"unable to parse SVG path data {svg_path}: missing moveto")
-        subpath.append(point)
-        current = point
+    def moveTo(self, point: tuple[float, float]) -> None:
+        self.finish()
+        self.subpath = [point]
 
-    def finish_subpath() -> None:
-        nonlocal subpath
-        if subpath is None:
+    def lineTo(self, point: tuple[float, float]) -> None:
+        self._require_subpath().append(point)
+
+    def curveTo(self, *points: tuple[float, float]) -> None:
+        self._require_subpath().extend(points)
+
+    def qCurveTo(self, *points: tuple[float, float] | None) -> None:
+        subpath = self._require_subpath()
+        subpath.extend(point for point in points if point is not None)
+
+    def closePath(self) -> None:
+        self.finish()
+
+    def endPath(self) -> None:
+        self.finish()
+
+    def addComponent(self, glyph_name: str, transformation: object) -> None:
+        raise PatchError(f"unable to parse SVG path data {self.svg_path}: invalid component")
+
+    def finish(self) -> None:
+        if self.subpath is None:
             return
-        if not _points_have_area(subpath):
-            raise PatchError(f"SVG asset produced an empty glyph: {svg_path}")
-        subpath = None
+        if not _points_have_area(self.subpath):
+            raise PatchError(f"SVG asset produced an empty glyph: {self.svg_path}")
+        self.subpath = None
 
-    while index < len(tokens):
-        if is_command(tokens[index]):
-            command = tokens[index]
-            index += 1
-        if command is None:
-            raise PatchError(f"unable to parse SVG path data {svg_path}: missing command")
-
-        absolute = command.isupper()
-        normalized_command = command.upper()
-        if normalized_command == "M":
-            finish_subpath()
-            x = read_number()
-            y = read_number()
-            current = (x, y) if absolute else (current[0] + x, current[1] + y)
-            subpath = [current]
-            command = "L" if absolute else "l"
-            while index < len(tokens) and not is_command(tokens[index]):
-                x = read_number()
-                y = read_number()
-                point = (x, y) if absolute else (current[0] + x, current[1] + y)
-                add_line(point)
-        elif normalized_command == "L":
-            while index < len(tokens) and not is_command(tokens[index]):
-                x = read_number()
-                y = read_number()
-                point = (x, y) if absolute else (current[0] + x, current[1] + y)
-                add_line(point)
-        elif normalized_command == "H":
-            while index < len(tokens) and not is_command(tokens[index]):
-                x = read_number()
-                point = (x, current[1]) if absolute else (current[0] + x, current[1])
-                add_line(point)
-        elif normalized_command == "V":
-            while index < len(tokens) and not is_command(tokens[index]):
-                y = read_number()
-                point = (current[0], y) if absolute else (current[0], current[1] + y)
-                add_line(point)
-        elif normalized_command == "Z":
-            finish_subpath()
-            command = None
-        else:
-            raise PatchError(f"unable to parse SVG path data {svg_path}: invalid command")
-    finish_subpath()
+    def _require_subpath(self) -> list[tuple[float, float]]:
+        if self.subpath is None:
+            raise PatchError(f"unable to parse SVG path data {self.svg_path}: missing moveto")
+        return self.subpath
 
 
 def _validate_svg_glyph(
     glyph: object,
     svg_path: SvgAssetPath,
     glyf_table: object,
-    advance_width: int,
-    units_per_em: int,
+    *,
+    min_x: float,
+    max_x: float,
+    min_y: float,
+    max_y: float,
 ) -> None:
     if getattr(glyph, "numberOfContours", 0) <= 0:
         raise PatchError(f"SVG asset produced an empty glyph: {svg_path}")
@@ -660,10 +696,10 @@ def _validate_svg_glyph(
     ):
         raise PatchError(f"SVG asset produced an empty glyph: {svg_path}")
     if (
-        getattr(glyph, "xMin", 0) < 0
-        or getattr(glyph, "xMax", 0) > advance_width
-        or getattr(glyph, "yMin", 0) < 0
-        or getattr(glyph, "yMax", 0) > units_per_em
+        getattr(glyph, "xMin", 0) < min_x
+        or getattr(glyph, "xMax", 0) > max_x
+        or getattr(glyph, "yMin", 0) < min_y
+        or getattr(glyph, "yMax", 0) > max_y
     ):
         raise PatchError(f"SVG asset produced out-of-cell glyph bounds: {svg_path}")
 
@@ -671,17 +707,13 @@ def _validate_svg_glyph(
 def _glyph_contours_have_area(glyph: object) -> bool:
     coordinates = getattr(glyph, "coordinates", ())
     contour_ends = getattr(glyph, "endPtsOfContours", ())
-    has_contour = False
     start = 0
     for end in contour_ends:
-        has_contour = True
         contour = coordinates[start : end + 1]
         start = end + 1
-        if len(contour) < 3:
-            return False
-        if not _points_have_area(contour):
-            return False
-    return has_contour
+        if len(contour) >= 3 and _points_have_area(contour):
+            return True
+    return False
 
 
 def _points_have_area(points: Any) -> bool:

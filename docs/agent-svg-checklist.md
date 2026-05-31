@@ -23,7 +23,7 @@ this list in sync with `src/agent_font_patcher/data/codepoints.json`.
 | 4 | Gemini | `gemini-cli` | `U+100044` | SVGL has Gemini. | available: `src/agent_font_patcher/data/assets/agents/gemini-cli.svg` |
 | 5 | Antigravity | `antigravity` | `U+10004C` | SVGL has Google Antigravity. | available: `src/agent_font_patcher/data/assets/agents/antigravity.svg` |
 | 6 | Pi | `pi` | `U+100052` | Homarr dashboard-icons has `pi-coding-agent.svg`. | available: `src/agent_font_patcher/data/assets/agents/pi.svg` |
-| 7 | Hermes Agent | `hermes-agent` | `U+100045` | Official OSS repo has `acp_registry/icon.svg`. | available: `src/agent_font_patcher/data/assets/agents/hermes-agent.svg` |
+| 7 | Hermes Agent | `hermes-agent` | `U+100045` | Agent Scan desktop has bundled Hermes provider logo `hermes-light.svg`. | available: `src/agent_font_patcher/data/assets/agents/hermes-agent.svg` |
 | 8 | OpenCode | `opencode` | `U+100043` | SVGL has OpenCode. | available: `src/agent_font_patcher/data/assets/agents/opencode.svg` |
 | 9 | Goose | `goose` | `U+100053` | Official OSS repo has `ui/desktop/src/images/glyph.svg`. | available: `src/agent_font_patcher/data/assets/agents/goose.svg` |
 | 10 | Amp | `amp` | `U+100046` | Product-specific source: `https://ampcode.com/amp-mark-color.svg`; SVGL AMP is a false positive. | available: `src/agent_font_patcher/data/assets/agents/amp.svg` |

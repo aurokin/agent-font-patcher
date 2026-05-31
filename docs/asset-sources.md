@@ -74,7 +74,7 @@ The exact import checklist, in screenshot order, lives in
 | `gemini-cli` | Gemini | `U+100044` | SVGL has Gemini. | available |
 | `antigravity` | Antigravity | `U+10004C` | SVGL has Google Antigravity. | available |
 | `pi` | Pi | `U+100052` | Homarr dashboard-icons has `pi-coding-agent.svg`. | available |
-| `hermes-agent` | Hermes Agent | `U+100045` | Official OSS repo has `acp_registry/icon.svg`. | available |
+| `hermes-agent` | Hermes Agent | `U+100045` | Agent Scan desktop has bundled Hermes provider logo `hermes-light.svg`. | available |
 | `opencode` | OpenCode | `U+100043` | SVGL has OpenCode. | available |
 | `goose` | Goose | `U+100053` | Official OSS repo has `ui/desktop/src/images/glyph.svg`. | available |
 | `amp` | Amp | `U+100046` | Product-specific source: `https://ampcode.com/amp-mark-color.svg`; SVGL AMP is a false positive. | available |

@@ -130,8 +130,8 @@
       "codepoint": "U+100045",
       "asset_status": "available",
       "source": "assets/agents/hermes-agent.svg",
-      "license": "Official OSS source; logo rights not granted",
-      "attribution": "Hermes Agent icon from https://github.com/NousResearch/hermes-agent/blob/main/acp_registry/icon.svg; product URL https://hermes-agent.nousresearch.com/"
+      "license": "Agent Scan bundled provider asset; logo rights not granted",
+      "attribution": "Hermes/NousResearch provider logo from Agent Scan desktop bundled asset https://github.com/aurokin/agentscan/tree/main/desktop/src/assets/providers; product URL https://hermes-agent.nousresearch.com/"
     },
     {
       "id": "amp",

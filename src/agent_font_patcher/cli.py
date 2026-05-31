@@ -9,7 +9,7 @@ from agent_font_patcher.font_cache import (
     refresh_font_cache,
 )
 from agent_font_patcher.inspector import FontInspection, inspect_agent_font
-from agent_font_patcher.manifest import Manifest, ManifestError, load_manifest
+from agent_font_patcher.manifest import Manifest, ManifestError, codepoint_to_int, load_manifest
 from agent_font_patcher.patcher import (
     PatchError,
     PatchResult,
@@ -138,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     preview_parser = subparsers.add_parser(
         "preview",
-        help="Generate an HTML specimen for agent glyph visual QA.",
+        help="Generate a specimen for agent glyph visual QA.",
     )
     preview_parser.add_argument("font_path", type=Path)
     preview_parser.add_argument(
@@ -155,6 +155,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         help="Directory where the specimen HTML will be written.",
+    )
+    preview_parser.add_argument(
+        "--terminal",
+        action="store_true",
+        help="Print glyphs to stdout for terminal font rendering checks instead of writing HTML.",
     )
     preview_parser.set_defaults(handler=handle_preview)
 
@@ -313,9 +318,16 @@ def handle_restore(args: argparse.Namespace) -> int:
 
 
 def handle_preview(args: argparse.Namespace) -> int:
+    terminal = getattr(args, "terminal", False)
+    if terminal and (args.output is not None or args.output_dir is not None):
+        raise SpecimenError("--output and --output-dir cannot be used with --terminal")
     if args.output is not None and args.output_dir is not None:
         raise SpecimenError("--output cannot be used with --output-dir")
     manifest = load_manifest(args.manifest_path)
+    if terminal:
+        inspection = inspect_agent_font(args.font_path, manifest)
+        print_terminal_preview(inspection)
+        return 1 if inspection.codepoints_error or not inspection.candidate.is_readable else 0
     output_path = args.output or default_specimen_path(args.font_path, args.output_dir)
     result = generate_html_specimen(args.font_path, output_path, manifest)
     print(f"font: {result.font_path}")
@@ -323,6 +335,35 @@ def handle_preview(args: argparse.Namespace) -> int:
     print(f"agent_glyphs: {result.present_count}/{result.total_count} present")
     print(f"patched: {'yes' if result.patch_metadata else 'no'}")
     return 0
+
+
+def print_terminal_preview(inspection: FontInspection) -> None:
+    candidate = inspection.candidate
+    present = inspection.present_icons
+    reserved = inspection.occupied_reserved_codepoints
+    coverage = tuple(
+        sorted(
+            (*inspection.icon_coverage, *inspection.reserved_coverage),
+            key=lambda item: codepoint_to_int(item.icon.codepoint),
+        )
+    )
+    print(f"font: {candidate.path}")
+    print(f"name: {candidate.full_name or candidate.family or candidate.path.stem}")
+    print(f"manifest: {inspection.manifest.manifest_version}")
+    print(f"patched: {'yes' if inspection.patch_metadata else 'no'}")
+    if not candidate.is_readable:
+        print(f"font_metadata: unreadable ({candidate.reason})")
+    if inspection.codepoints_error:
+        print(f"agent_codepoints: unreadable ({inspection.codepoints_error})")
+        return
+    legacy_present = len(present) + len(reserved)
+    legacy_total = len(inspection.icon_coverage) + len(inspection.reserved_coverage)
+    print(f"agent_glyphs: {legacy_present}/{legacy_total} present")
+    print("symbols:")
+    for item in coverage:
+        icon = item.icon
+        status = "present" if item.is_present else "missing"
+        print(f"  {icon.codepoint}  {icon.character}  {icon.id}  {icon.display_name}  {status}")
 
 
 def handle_cache_refresh(args: argparse.Namespace) -> int:
