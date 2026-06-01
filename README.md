@@ -6,6 +6,8 @@ Patch Nerd Fonts-compatible fonts with glyphs for modern agent tooling.
 need agent/provider/status glyphs in terminal surfaces where SVG rendering is
 not available. GUI apps should still use SVG assets directly when they can.
 
+![Terminal preview showing patched agent glyphs](docs/images/terminal-preview.png)
+
 ## Status
 
 - Packaged manifest: `agent-icons-v8`
@@ -77,10 +79,6 @@ Print the agent glyphs in the current terminal:
 ```bash
 agent-font-patcher preview --terminal ./out/JetBrainsMonoNerdFont-Regular-Agent.ttf
 ```
-
-Example terminal preview:
-
-![Terminal preview showing patched agent glyphs](docs/images/terminal-preview.png)
 
 Restore an in-place backup:
 
