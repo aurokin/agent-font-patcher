@@ -102,7 +102,7 @@ is still open, but the data model should include:
 ```json
 {
   "project": "agent-font-patcher",
-  "patcher_version": "0.1.0",
+  "patcher_version": "0.2.0",
   "manifest_version": "agent-icons-v8",
   "codepoint_range": "U+100000-U+1000FF",
   "source_font_name": "JetBrainsMono Nerd Font Regular",

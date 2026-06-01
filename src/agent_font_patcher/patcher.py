@@ -31,7 +31,7 @@ from agent_font_patcher.manifest import Manifest, codepoint_to_int
 
 PATCH_METADATA_NAME_ID = 256
 PATCH_METADATA_NAME_IDS = range(256, 384)
-PATCHER_VERSION = "0.1.0"
+PATCHER_VERSION = "0.2.0"
 REQUIRED_METADATA_KEYS = {
     "project",
     "patcher_version",

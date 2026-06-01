@@ -14,9 +14,9 @@ not available. GUI apps should still use SVG assets directly when they can.
 - Implemented commands: `manifest`, `scan`, `patch`, `inspect`, `restore`,
   `preview`, and `cache refresh`
 
-The current release candidate supports branch-off font generation, explicit
-in-place patching with backups, cache refresh, patch metadata inspection, and
-HTML or terminal specimen previews.
+The current release supports branch-off font generation, explicit in-place
+patching with backups, cache refresh, patch metadata inspection, and HTML or
+terminal specimen previews.
 
 ## Install For Development
 
